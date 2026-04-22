@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocalState } from '@/lib/storage';
 import { createCharacterFromWizard, type WizardOutput } from '@/lib/characters';
 import type { Ability, Character } from '@/lib/types';
-import { ABILITIES, ABILITY_LABELS } from '@/lib/types';
+import { ABILITIES, ABILITY_LABELS, SKILLS } from '@/lib/types';
 import { abilityModifier, proficiencyBonus } from '@/lib/dice';
 import { SPECIES } from '@/lib/data/species';
 import { CLASSES } from '@/lib/data/classes';
@@ -22,6 +22,18 @@ const ALIGNMENTS = [
 
 function fmt(n: number) {
   return n >= 0 ? `+${n}` : `${n}`;
+}
+
+function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
+  return (
+    <span className="relative group/tip inline-flex items-center">
+      {children}
+      <span className="pointer-events-none absolute bottom-full left-0 mb-1.5 z-20 hidden group-hover/tip:block w-56 rounded-md bg-ink text-parchment text-xs px-2.5 py-2 shadow-lg leading-snug">
+        {text}
+        <span className="absolute top-full left-3 -mt-px border-4 border-transparent border-t-ink" />
+      </span>
+    </span>
+  );
 }
 
 function StepIndicator({ current, total }: { current: number; total: number }) {
@@ -317,6 +329,7 @@ export default function NewCharacterPage() {
                     const alreadyFromBg = selectedBackground?.skillProficiencies.includes(sk) ?? false;
                     const checked = chosenClassSkills.includes(sk) || alreadyFromBg;
                     const disabled = alreadyFromBg || (!chosenClassSkills.includes(sk) && chosenClassSkills.length >= selectedClass.skillChoiceCount);
+                    const skillDef = SKILLS.find((s) => s.key === sk);
                     return (
                       <label key={sk} className={`flex items-center gap-2 text-sm rounded px-2 py-1 ${disabled && !alreadyFromBg ? 'opacity-40' : ''} ${alreadyFromBg ? 'text-ink/40 italic' : ''}`}>
                         <input
@@ -325,7 +338,15 @@ export default function NewCharacterPage() {
                           disabled={disabled}
                           onChange={() => !alreadyFromBg && handleClassSkillToggle(sk)}
                         />
-                        <span className="capitalize">{sk.replace(/-/g, ' ')}</span>
+                        {skillDef?.description ? (
+                          <Tooltip text={`${ABILITY_LABELS[skillDef.ability]} — ${skillDef.description}`}>
+                            <span className="capitalize underline decoration-dotted decoration-ink/30 cursor-help">
+                              {sk.replace(/-/g, ' ')}
+                            </span>
+                          </Tooltip>
+                        ) : (
+                          <span className="capitalize">{sk.replace(/-/g, ' ')}</span>
+                        )}
                         {alreadyFromBg && <span className="text-xs">(from background)</span>}
                       </label>
                     );
