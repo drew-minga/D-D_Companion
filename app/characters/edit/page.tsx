@@ -428,6 +428,21 @@ function CharacterEditor() {
                   <span className="text-sm text-ink/80">{t.description}</span>
                 </div>
               ))}
+              {(() => {
+                const lineage = speciesData.lineages?.find((l) => l.id === (character.speciesLineage ?? ''));
+                if (!lineage) return null;
+                return (
+                  <div className="border-t border-ink/10 pt-2 mt-2">
+                    <p className="text-xs font-semibold text-ink/60 uppercase tracking-wide mb-1">{lineage.name} Lineage</p>
+                    {lineage.traits.map((t) => (
+                      <div key={t.name}>
+                        <span className="text-sm font-semibold">{t.name}. </span>
+                        <span className="text-sm text-ink/80">{t.description}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </section>

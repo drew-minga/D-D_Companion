@@ -59,6 +59,7 @@ export default function NewCharacterPage() {
   const [name, setName] = useState('');
   const [alignment, setAlignment] = useState('');
   const [speciesId, setSpeciesId] = useState('');
+  const [lineageId, setLineageId] = useState('');
   const [classId, setClassId] = useState('');
   const [chosenClassSkills, setChosenClassSkills] = useState<string[]>([]);
   const [backgroundId, setBackgroundId] = useState('');
@@ -84,7 +85,11 @@ export default function NewCharacterPage() {
 
   function canProceed(): boolean {
     if (step === 0) return name.trim().length > 0;
-    if (step === 1) return speciesId !== '';
+    if (step === 1) {
+      if (!speciesId) return false;
+      if (selectedSpecies?.lineages && selectedSpecies.lineages.length > 0) return lineageId !== '';
+      return true;
+    }
     if (step === 2) return classId !== '' && chosenClassSkills.length === (selectedClass?.skillChoiceCount ?? 0);
     if (step === 3) {
       if (!backgroundId) return false;
@@ -197,6 +202,7 @@ export default function NewCharacterPage() {
     const output: WizardOutput = {
       name,
       speciesId,
+      lineageId,
       classId,
       backgroundId,
       alignment,
@@ -260,7 +266,7 @@ export default function NewCharacterPage() {
             {SPECIES.map((sp) => (
               <button
                 key={sp.id}
-                onClick={() => setSpeciesId(sp.id)}
+                onClick={() => { setSpeciesId(sp.id); setLineageId(''); }}
                 className={`card text-left transition-all ${
                   speciesId === sp.id ? 'ring-2 ring-gold bg-gold/10' : 'hover:bg-white/80'
                 }`}
@@ -273,17 +279,60 @@ export default function NewCharacterPage() {
           </div>
 
           {selectedSpecies && (
-            <div className="card bg-parchment/60">
-              <h3 className="heading text-lg text-blood">{selectedSpecies.name}</h3>
-              <p className="text-xs text-ink/50 mb-3">{selectedSpecies.size} · Speed {selectedSpecies.speed} ft. · Languages: {selectedSpecies.languages.join(', ')}</p>
-              <div className="space-y-2">
-                {selectedSpecies.traits.map((t) => (
-                  <div key={t.name}>
-                    <span className="text-sm font-semibold">{t.name}. </span>
-                    <span className="text-sm text-ink/80">{t.description}</span>
-                  </div>
-                ))}
+            <div className="card bg-parchment/60 space-y-4">
+              <div>
+                <h3 className="heading text-lg text-blood">{selectedSpecies.name}</h3>
+                <p className="text-xs text-ink/50 mb-3">{selectedSpecies.size} · Speed {selectedSpecies.speed} ft. · Languages: {selectedSpecies.languages.join(', ')}</p>
+                <div className="space-y-2">
+                  {selectedSpecies.traits.map((t) => (
+                    <div key={t.name}>
+                      <span className="text-sm font-semibold">{t.name}. </span>
+                      <span className="text-sm text-ink/80">{t.description}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
+
+              {selectedSpecies.lineages && selectedSpecies.lineages.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold mb-2 text-blood">
+                    Choose your {selectedSpecies.id === 'dragonborn' ? 'Draconic Ancestry' : 'Lineage'}:
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {selectedSpecies.lineages.map((lg) => (
+                      <button
+                        key={lg.id}
+                        onClick={() => setLineageId(lg.id)}
+                        className={`text-left rounded-md border px-3 py-2 text-sm transition-all ${
+                          lineageId === lg.id
+                            ? 'border-blood bg-blood/10 ring-1 ring-blood/40'
+                            : 'border-ink/15 bg-white/60 hover:bg-white'
+                        }`}
+                      >
+                        <div className="font-semibold">{lg.name}</div>
+                        <div className="text-xs text-ink/60 mt-0.5">{lg.description}</div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {lineageId && (() => {
+                    const lg = selectedSpecies.lineages!.find((l) => l.id === lineageId);
+                    return lg ? (
+                      <div className="mt-3 space-y-1.5 border-t border-ink/10 pt-3">
+                        <p className="text-xs font-semibold text-ink/60 uppercase tracking-wide">
+                          {lg.name} Traits
+                        </p>
+                        {lg.traits.map((t) => (
+                          <div key={t.name}>
+                            <span className="text-sm font-semibold">{t.name}. </span>
+                            <span className="text-sm text-ink/80">{t.description}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              )}
             </div>
           )}
         </div>

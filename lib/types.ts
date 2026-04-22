@@ -89,6 +89,7 @@ export interface Character {
 
   // --- 5.5e fields (optional for backward compat) ---
   species?: string;
+  speciesLineage?: string;
   subclass?: string;
   exhaustion?: number;
   heroicInspiration?: boolean;

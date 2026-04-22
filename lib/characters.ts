@@ -39,6 +39,7 @@ export function newCharacter(): Character {
     inventory: [],
     notes: '',
     species: '',
+    speciesLineage: '',
     subclass: '',
     exhaustion: 0,
     heroicInspiration: false,
@@ -79,6 +80,7 @@ export function migrateCharacter(c: unknown): Character {
 export interface WizardOutput {
   name: string;
   speciesId: string;
+  lineageId: string;
   classId: string;
   backgroundId: string;
   alignment: string;
@@ -129,6 +131,7 @@ export function createCharacterFromWizard(input: WizardOutput): Character {
     name: input.name || 'New Adventurer',
     race: speciesDef?.name ?? input.speciesId,
     species: input.speciesId,
+    speciesLineage: input.lineageId,
     class: classDef?.name ?? input.classId,
     subclass: '',
     level: 1,

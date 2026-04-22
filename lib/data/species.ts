@@ -3,6 +3,13 @@ export interface SpeciesTrait {
   description: string;
 }
 
+export interface SpeciesLineage {
+  id: string;
+  name: string;
+  description: string;
+  traits: SpeciesTrait[];
+}
+
 export interface Species {
   id: string;
   name: string;
@@ -10,6 +17,7 @@ export interface Species {
   speed: number;
   languages: string[];
   traits: SpeciesTrait[];
+  lineages?: SpeciesLineage[];
 }
 
 export const SPECIES: Species[] = [
@@ -70,6 +78,18 @@ export const SPECIES: Species[] = [
         description: 'When you reach character level 5, you sprout draconic wings. As a Bonus Action, you can cause the wings to appear and gain a Fly Speed equal to your Speed. The wings last until you dismiss them as a Bonus Action or you have the Incapacitated condition.',
       },
     ],
+    lineages: [
+      { id: 'black', name: 'Black Dragon', description: 'Acid damage · 30-ft. Line breath weapon', traits: [{ name: 'Ancestry: Black Dragon', description: 'Damage type: Acid. Breath weapon shape: 30-foot Line (5 ft. wide). Resistance: Acid.' }] },
+      { id: 'blue', name: 'Blue Dragon', description: 'Lightning damage · 30-ft. Line breath weapon', traits: [{ name: 'Ancestry: Blue Dragon', description: 'Damage type: Lightning. Breath weapon shape: 30-foot Line (5 ft. wide). Resistance: Lightning.' }] },
+      { id: 'brass', name: 'Brass Dragon', description: 'Fire damage · 30-ft. Line breath weapon', traits: [{ name: 'Ancestry: Brass Dragon', description: 'Damage type: Fire. Breath weapon shape: 30-foot Line (5 ft. wide). Resistance: Fire.' }] },
+      { id: 'bronze', name: 'Bronze Dragon', description: 'Lightning damage · 30-ft. Line breath weapon', traits: [{ name: 'Ancestry: Bronze Dragon', description: 'Damage type: Lightning. Breath weapon shape: 30-foot Line (5 ft. wide). Resistance: Lightning.' }] },
+      { id: 'copper', name: 'Copper Dragon', description: 'Acid damage · 30-ft. Line breath weapon', traits: [{ name: 'Ancestry: Copper Dragon', description: 'Damage type: Acid. Breath weapon shape: 30-foot Line (5 ft. wide). Resistance: Acid.' }] },
+      { id: 'gold', name: 'Gold Dragon', description: 'Fire damage · 15-ft. Cone breath weapon', traits: [{ name: 'Ancestry: Gold Dragon', description: 'Damage type: Fire. Breath weapon shape: 15-foot Cone. Resistance: Fire.' }] },
+      { id: 'green', name: 'Green Dragon', description: 'Poison damage · 15-ft. Cone breath weapon', traits: [{ name: 'Ancestry: Green Dragon', description: 'Damage type: Poison. Breath weapon shape: 15-foot Cone. Resistance: Poison.' }] },
+      { id: 'red', name: 'Red Dragon', description: 'Fire damage · 15-ft. Cone breath weapon', traits: [{ name: 'Ancestry: Red Dragon', description: 'Damage type: Fire. Breath weapon shape: 15-foot Cone. Resistance: Fire.' }] },
+      { id: 'silver', name: 'Silver Dragon', description: 'Cold damage · 15-ft. Cone breath weapon', traits: [{ name: 'Ancestry: Silver Dragon', description: 'Damage type: Cold. Breath weapon shape: 15-foot Cone. Resistance: Cold.' }] },
+      { id: 'white', name: 'White Dragon', description: 'Cold damage · 15-ft. Cone breath weapon', traits: [{ name: 'Ancestry: White Dragon', description: 'Damage type: Cold. Breath weapon shape: 15-foot Cone. Resistance: Cold.' }] },
+    ],
   },
   {
     id: 'dwarf',
@@ -124,6 +144,36 @@ export const SPECIES: Species[] = [
         description: 'You don\'t need to sleep, and magic can\'t put you to sleep. You can finish a Long Rest in 4 hours if you spend those hours in a trancelike meditation, during which you retain consciousness.',
       },
     ],
+    lineages: [
+      {
+        id: 'drow',
+        name: 'Drow',
+        description: 'Born in the Underdark, drow have adapted to life far from sunlight.',
+        traits: [
+          { name: 'Extended Darkvision', description: 'Your Darkvision range increases to 120 feet.' },
+          { name: 'Drow Magic', description: 'You know the Dancing Lights cantrip. At level 3 you can cast Faerie Fire once per Long Rest. At level 5 you can also cast Darkness once per Long Rest. Charisma is your spellcasting ability for these spells.' },
+          { name: 'Sunlight Sensitivity', description: 'You have Disadvantage on attack rolls and on Perception checks that rely on sight when you or your target is in direct sunlight.' },
+        ],
+      },
+      {
+        id: 'high-elf',
+        name: 'High Elf',
+        description: 'High elves have an innate magical nature and a strong connection to the arcane.',
+        traits: [
+          { name: 'Cantrip', description: 'You know one cantrip of your choice from the Wizard spell list. Intelligence is your spellcasting ability for it.' },
+          { name: 'High Elf Magic', description: 'At level 3 you can cast Detect Magic once per Long Rest without expending a spell slot. At level 5 you can also cast Misty Step once per Long Rest. Intelligence is your spellcasting ability.' },
+        ],
+      },
+      {
+        id: 'wood-elf',
+        name: 'Wood Elf',
+        description: 'Wood elves move through the natural world with ease, blending into forest and shadow.',
+        traits: [
+          { name: 'Fleet of Foot', description: 'Your Speed increases to 35 feet.' },
+          { name: 'Wood Elf Magic', description: 'You know the Druidcraft cantrip. At level 3 you can cast Longstrider once per Long Rest without expending a spell slot. At level 5 you can also cast Pass without Trace once per Long Rest. Wisdom is your spellcasting ability.' },
+        ],
+      },
+    ],
   },
   {
     id: 'gnome',
@@ -142,7 +192,27 @@ export const SPECIES: Species[] = [
       },
       {
         name: 'Gnomish Lineage',
-        description: 'You are part of one of the gnomish lineages: Forest Gnome (Minor Illusion cantrip + Speak with Animals) or Rock Gnome (Mending + Prestidigitation + Tinker proficiency).',
+        description: 'You are part of one of the gnomish lineages: Forest Gnome or Rock Gnome. Choose your lineage below.',
+      },
+    ],
+    lineages: [
+      {
+        id: 'forest-gnome',
+        name: 'Forest Gnome',
+        description: 'Forest gnomes have a natural gift for illusion and an easy rapport with small animals.',
+        traits: [
+          { name: 'Minor Illusion', description: 'You know the Minor Illusion cantrip. Intelligence is your spellcasting ability for it.' },
+          { name: 'Forest Gnome Magic', description: 'You can cast Speak with Animals once per Long Rest without a spell slot. At level 3 you can also cast Misty Step once per Long Rest. Intelligence is your spellcasting ability.' },
+        ],
+      },
+      {
+        id: 'rock-gnome',
+        name: 'Rock Gnome',
+        description: 'Rock gnomes have an innate inventiveness and mechanical aptitude.',
+        traits: [
+          { name: 'Mending & Prestidigitation', description: 'You know the Mending and Prestidigitation cantrips. Intelligence is your spellcasting ability for them.' },
+          { name: "Tinker's Proficiency", description: "You have proficiency with Tinker's Tools. Using those tools, you can spend 1 hour and 10 gp worth of materials to construct a Tiny clockwork device (AC 5, 1 HP)." },
+        ],
       },
     ],
   },
@@ -252,6 +322,35 @@ export const SPECIES: Species[] = [
       {
         name: 'Otherworldly Presence',
         description: 'You know the Thaumaturgy cantrip. When you cast it with this trait, the spell uses Charisma as the spellcasting ability.',
+      },
+    ],
+    lineages: [
+      {
+        id: 'abyssal',
+        name: 'Abyssal',
+        description: 'Your fiendish bloodline traces to demon lords of the chaotic Abyss.',
+        traits: [
+          { name: 'Poison Resistance', description: 'You have Resistance to Poison damage.' },
+          { name: 'Abyssal Magic', description: 'At level 3 you can cast Ray of Sickness once per Long Rest (Wisdom). At level 5 you can also cast Hold Person once per Long Rest (Wisdom).' },
+        ],
+      },
+      {
+        id: 'chthonic',
+        name: 'Chthonic',
+        description: 'Your fiendish bloodline traces to the dark powers of the underworld.',
+        traits: [
+          { name: 'Necrotic Resistance', description: 'You have Resistance to Necrotic damage.' },
+          { name: 'Chthonic Magic', description: 'At level 3 you can cast False Life once per Long Rest (Wisdom). At level 5 you can also cast Ray of Enfeeblement once per Long Rest (Wisdom).' },
+        ],
+      },
+      {
+        id: 'infernal',
+        name: 'Infernal',
+        description: 'Your fiendish bloodline traces to the lawful devil lords of the Nine Hells.',
+        traits: [
+          { name: 'Fire Resistance', description: 'You have Resistance to Fire damage.' },
+          { name: 'Infernal Magic', description: 'At level 3 you can cast Hellish Rebuke once per Long Rest (Charisma). At level 5 you can also cast Darkness once per Long Rest (Charisma).' },
+        ],
       },
     ],
   },
