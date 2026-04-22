@@ -59,7 +59,10 @@ export default function NewCharacterPage() {
   const [arrayAssignments, setArrayAssignments] = useState<Record<Ability, number | null>>({
     str: null, dex: null, con: null, int: null, wis: null, cha: null,
   });
-  const [abilityMode, setAbilityMode] = useState<'array' | 'manual'>('array');
+  const [abilityMode, setAbilityMode] = useState<'array' | 'manual' | 'roll'>('array');
+  const [rollDice, setRollDice] = useState<Record<Ability, number[]>>(
+    { str: [], dex: [], con: [], int: [], wis: [], cha: [] },
+  );
 
   const selectedSpecies = SPECIES.find((s) => s.id === speciesId);
   const selectedClass = CLASSES.find((c) => c.id === classId);
@@ -78,6 +81,7 @@ export default function NewCharacterPage() {
     }
     if (step === 4) {
       if (abilityMode === 'array') return Object.values(arrayAssignments).every((v) => v !== null);
+      if (abilityMode === 'roll') return ABILITIES.every((ab) => rollDice[ab].length > 0);
       return true;
     }
     return true;
@@ -108,6 +112,40 @@ export default function NewCharacterPage() {
       next[ability] = value;
       return next;
     });
+  }
+
+  function d6(): number {
+    if (typeof crypto !== 'undefined' && 'getRandomValues' in crypto) {
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      return (buf[0] % 6) + 1;
+    }
+    return Math.floor(Math.random() * 6) + 1;
+  }
+
+  function roll4d6(): { dice: number[]; score: number } {
+    const dice = [d6(), d6(), d6(), d6()];
+    const sorted = [...dice].sort((a, b) => a - b);
+    const score = sorted[1] + sorted[2] + sorted[3]; // drop sorted[0] (lowest)
+    return { dice, score };
+  }
+
+  function rollSingle(ab: Ability) {
+    const { dice, score } = roll4d6();
+    setRollDice((prev) => ({ ...prev, [ab]: dice }));
+    setBaseAbilities((prev) => ({ ...prev, [ab]: score }));
+  }
+
+  function rollAllAbilities() {
+    const newDice = { ...rollDice };
+    const newScores = { ...baseAbilities };
+    for (const ab of ABILITIES) {
+      const { dice, score } = roll4d6();
+      newDice[ab] = dice;
+      newScores[ab] = score;
+    }
+    setRollDice(newDice);
+    setBaseAbilities(newScores);
   }
 
   function getEffectiveAbilities(): Record<Ability, number> {
@@ -403,35 +441,63 @@ export default function NewCharacterPage() {
       {/* Step 4: Abilities */}
       {step === 4 && (
         <div className="space-y-4">
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4">
             <label className="flex items-center gap-2 text-sm">
-              <input type="radio" checked={abilityMode === 'array'} onChange={() => setAbilityMode('array')} />
+              <input type="radio" name="abilityMode" checked={abilityMode === 'array'} onChange={() => setAbilityMode('array')} />
               Standard Array (15, 14, 13, 12, 10, 8)
             </label>
             <label className="flex items-center gap-2 text-sm">
-              <input type="radio" checked={abilityMode === 'manual'} onChange={() => setAbilityMode('manual')} />
+              <input type="radio" name="abilityMode" checked={abilityMode === 'roll'} onChange={() => setAbilityMode('roll')} />
+              Roll 4d6 Drop Lowest
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="radio" name="abilityMode" checked={abilityMode === 'manual'} onChange={() => setAbilityMode('manual')} />
               Manual Entry
             </label>
           </div>
 
           <div className="card">
-            <h3 className="heading text-base mb-3">Assign Ability Scores</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="heading text-base">Assign Ability Scores</h3>
+              {abilityMode === 'roll' && (
+                <button onClick={rollAllAbilities} className="btn-gold text-sm px-3 py-1">
+                  ↻ Roll All 6
+                </button>
+              )}
+            </div>
             {selectedBackground && (
               <p className="text-xs text-ink/60 mb-3">
                 Background ASIs (+2/+1 or three +1s) are previewed below but applied at character creation.
               </p>
             )}
+            {abilityMode === 'roll' && (
+              <p className="text-xs text-ink/60 mb-3">
+                Roll 4d6 for each ability — the lowest die is dropped automatically.
+              </p>
+            )}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {ABILITIES.map((ab) => {
                 const previewScore = getPreviewAbilities()[ab];
+                const dice = rollDice[ab];
+                const hasRolled = dice.length > 0;
+                const sortedDice = hasRolled ? [...dice].sort((a, b) => a - b) : [];
+                const rolledBase = hasRolled ? sortedDice[1] + sortedDice[2] + sortedDice[3] : 0;
                 const baseScore = abilityMode === 'array'
                   ? (arrayAssignments[ab] ?? 8)
                   : (baseAbilities[ab] ?? 10);
-                const asiBonus = previewScore - baseScore;
+                const asiBonus = previewScore - (abilityMode === 'roll' ? rolledBase : baseScore);
                 return (
                   <div key={ab} className="rounded-md border border-ink/15 bg-white/70 p-3">
-                    <div className="label mb-1">{ABILITY_LABELS[ab]}</div>
-                    {abilityMode === 'array' ? (
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="label">{ABILITY_LABELS[ab]}</div>
+                      {abilityMode === 'roll' && (
+                        <button onClick={() => rollSingle(ab)} className="btn text-xs py-0.5 px-2">
+                          {hasRolled ? '↻ Reroll' : '↻ Roll'}
+                        </button>
+                      )}
+                    </div>
+
+                    {abilityMode === 'array' && (
                       <select
                         className="input"
                         value={arrayAssignments[ab] ?? ''}
@@ -444,7 +510,9 @@ export default function NewCharacterPage() {
                           </option>
                         ))}
                       </select>
-                    ) : (
+                    )}
+
+                    {abilityMode === 'manual' && (
                       <input
                         type="number"
                         min={3}
@@ -454,10 +522,37 @@ export default function NewCharacterPage() {
                         onChange={(e) => setBaseAbilities((prev) => ({ ...prev, [ab]: Math.max(3, Math.min(18, parseInt(e.target.value || '10', 10))) }))}
                       />
                     )}
-                    <div className="mt-1 text-center">
-                      <span className="heading text-xl">{previewScore}</span>
-                      {asiBonus > 0 && <span className="text-xs text-green-700 ml-1">(+{asiBonus} bg)</span>}
-                      <span className="text-xs text-ink/50 ml-2">{fmt(abilityModifier(previewScore))}</span>
+
+                    {abilityMode === 'roll' && (
+                      hasRolled ? (
+                        <div className="flex gap-1 flex-wrap mt-1">
+                          {sortedDice.map((d, i) => (
+                            <span
+                              key={i}
+                              title={i === 0 ? 'Dropped (lowest)' : 'Kept'}
+                              className={`inline-flex items-center justify-center w-7 h-7 rounded border text-sm font-bold ${
+                                i === 0
+                                  ? 'text-ink/25 border-ink/15 bg-white/40 line-through'
+                                  : 'text-ink border-ink/40 bg-white'
+                              }`}
+                            >
+                              {d}
+                            </span>
+                          ))}
+                          <span className="text-xs text-ink/50 self-center ml-1">= {rolledBase}</span>
+                        </div>
+                      ) : (
+                        <div className="text-center text-ink/35 text-sm py-1">— not rolled —</div>
+                      )
+                    )}
+
+                    <div className="mt-2 text-center">
+                      <span className="heading text-xl">{abilityMode === 'roll' && !hasRolled ? '?' : previewScore}</span>
+                      {asiBonus > 0 && hasRolled && <span className="text-xs text-green-700 ml-1">(+{asiBonus} bg)</span>}
+                      {asiBonus > 0 && abilityMode !== 'roll' && <span className="text-xs text-green-700 ml-1">(+{asiBonus} bg)</span>}
+                      {(abilityMode !== 'roll' || hasRolled) && (
+                        <span className="text-xs text-ink/50 ml-2">{fmt(abilityModifier(previewScore))}</span>
+                      )}
                     </div>
                   </div>
                 );
