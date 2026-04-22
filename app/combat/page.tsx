@@ -47,6 +47,7 @@ export default function CombatPage() {
       ac,
       conditions: [],
       isPlayer,
+      exhaustion: 0,
     };
     setEnc((e) => ({ ...e, combatants: sortByInit([...e.combatants, c]) }));
     setName('');
@@ -200,6 +201,14 @@ export default function CombatPage() {
                     onChange={(e) => patch(c.id, { ac: parseInt(e.target.value || '0', 10) })}
                   />
                 </label>
+                {/* Exhaustion stepper */}
+                <div className="flex items-center gap-1 text-xs">
+                  <span className="text-ink/60">Exh:</span>
+                  <button onClick={() => patch(c.id, { exhaustion: Math.max(0, (c.exhaustion ?? 0) - 1) })} className="btn px-1">−</button>
+                  <span className={`w-4 text-center font-semibold ${(c.exhaustion ?? 0) > 0 ? 'text-amber-700' : 'text-ink/30'}`}>{c.exhaustion ?? 0}</span>
+                  <button onClick={() => patch(c.id, { exhaustion: Math.min(6, (c.exhaustion ?? 0) + 1) })} className="btn px-1">+</button>
+                  {(c.exhaustion ?? 0) > 0 && <span className="text-ink/50">(−{c.exhaustion} d20)</span>}
+                </div>
                 <details className="relative">
                   <summary className="btn cursor-pointer list-none">Conditions</summary>
                   <div className="absolute right-0 z-10 mt-1 w-56 rounded-md border border-ink/15 bg-white p-2 shadow-lg">

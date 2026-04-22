@@ -32,9 +32,44 @@ export const SKILLS: { key: string; label: string; ability: Ability }[] = [
   { key: 'survival', label: 'Survival', ability: 'wis' },
 ];
 
+// --- 5.5e supporting types ---
+
+export interface DeathSaves {
+  successes: number;
+  failures: number;
+}
+
+export interface SpellSlotState {
+  /** 9-element array; index 0 = 1st-level slots */
+  total: number[];
+  used: number[];
+}
+
+export interface PactSlotState {
+  total: number;
+  used: number;
+  slotLevel: number;
+}
+
+export interface Currency {
+  pp: number;
+  gp: number;
+  ep: number;
+  sp: number;
+  cp: number;
+}
+
+export interface CharacterFeat {
+  featId: string;
+  source: 'origin' | 'asi' | 'class' | 'other';
+  level: number;
+}
+
 export interface Character {
+  // --- Core fields (unchanged) ---
   id: string;
   name: string;
+  /** @deprecated Use species. Kept for backward compatibility. */
   race: string;
   class: string;
   level: number;
@@ -51,6 +86,21 @@ export interface Character {
   notes: string;
   createdAt: number;
   updatedAt: number;
+
+  // --- 5.5e fields (optional for backward compat) ---
+  species?: string;
+  subclass?: string;
+  exhaustion?: number;
+  heroicInspiration?: boolean;
+  deathSaves?: DeathSaves;
+  currency?: Currency;
+  spellSlots?: SpellSlotState;
+  pactSlots?: PactSlotState;
+  knownSpells?: string[];
+  feats?: CharacterFeat[];
+  toolProficiencies?: string[];
+  languages?: string[];
+  schemaVersion?: number;
 }
 
 export interface Combatant {
@@ -63,6 +113,7 @@ export interface Combatant {
   conditions: string[];
   isPlayer: boolean;
   notes?: string;
+  exhaustion?: number;
 }
 
 export interface Encounter {
