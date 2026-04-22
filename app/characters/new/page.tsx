@@ -50,7 +50,9 @@ export default function NewCharacterPage() {
   const [classId, setClassId] = useState('');
   const [chosenClassSkills, setChosenClassSkills] = useState<string[]>([]);
   const [backgroundId, setBackgroundId] = useState('');
-  const [asiVariant, setAsiVariant] = useState<'twoOne' | 'threeOne'>('twoOne');
+  const [asiMode, setAsiMode] = useState<'twoOne' | 'threeOne'>('twoOne');
+  const [asiPlus2, setAsiPlus2] = useState<Ability | null>(null);
+  const [asiPlus1, setAsiPlus1] = useState<Ability | null>(null);
   const [baseAbilities, setBaseAbilities] = useState<Record<Ability, number>>({
     str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8,
   });
@@ -69,7 +71,11 @@ export default function NewCharacterPage() {
     if (step === 0) return name.trim().length > 0;
     if (step === 1) return speciesId !== '';
     if (step === 2) return classId !== '' && chosenClassSkills.length === (selectedClass?.skillChoiceCount ?? 0);
-    if (step === 3) return backgroundId !== '';
+    if (step === 3) {
+      if (!backgroundId) return false;
+      if (asiMode === 'twoOne') return asiPlus2 !== null && asiPlus1 !== null;
+      return true;
+    }
     if (step === 4) {
       if (abilityMode === 'array') return Object.values(arrayAssignments).every((v) => v !== null);
       return true;
@@ -121,12 +127,11 @@ export default function NewCharacterPage() {
     const base = getEffectiveAbilities();
     if (!selectedBackground) return base;
     const result = { ...base };
-    if (asiVariant === 'twoOne') {
-      const { plus2, plus1 } = selectedBackground.abilityScoreIncreases.twoOne;
-      result[plus2] = (result[plus2] ?? 10) + 2;
-      result[plus1] = (result[plus1] ?? 10) + 1;
-    } else {
-      for (const ab of selectedBackground.abilityScoreIncreases.threeOne) {
+    if (asiMode === 'twoOne' && asiPlus2 && asiPlus1) {
+      result[asiPlus2] = (result[asiPlus2] ?? 10) + 2;
+      result[asiPlus1] = (result[asiPlus1] ?? 10) + 1;
+    } else if (asiMode === 'threeOne') {
+      for (const ab of selectedBackground.abilityScoreIncreases.abilities) {
         result[ab] = (result[ab] ?? 10) + 1;
       }
     }
@@ -146,7 +151,9 @@ export default function NewCharacterPage() {
       backgroundId,
       alignment,
       baseAbilities: effectiveAbilities,
-      asiVariant,
+      asiMode,
+      asiPlus2,
+      asiPlus1,
       chosenClassSkills,
     };
     const newChar = createCharacterFromWizard(output);
@@ -317,7 +324,7 @@ export default function NewCharacterPage() {
               return (
                 <button
                   key={bg.id}
-                  onClick={() => setBackgroundId(bg.id)}
+                  onClick={() => { setBackgroundId(bg.id); setAsiMode('twoOne'); setAsiPlus2(null); setAsiPlus1(null); }}
                   className={`card text-left transition-all ${
                     backgroundId === bg.id ? 'ring-2 ring-gold bg-gold/10' : 'hover:bg-white/80'
                   }`}
@@ -336,15 +343,29 @@ export default function NewCharacterPage() {
               <p className="text-sm text-ink/70">{selectedBackground.description}</p>
 
               <div>
-                <p className="text-sm font-semibold mb-1">Ability Score Increases — choose distribution:</p>
-                <div className="flex gap-3">
+                <p className="text-sm font-semibold mb-2">Ability Score Increases — choose distribution:</p>
+                <div className="space-y-1">
+                  {selectedBackground.abilityScoreIncreases.abilities.flatMap((a, i, arr) =>
+                    arr.filter((_, j) => j !== i).map((b) => (
+                      <label key={`${a}-${b}`} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="radio"
+                          name="asi"
+                          checked={asiMode === 'twoOne' && asiPlus2 === a && asiPlus1 === b}
+                          onChange={() => { setAsiMode('twoOne'); setAsiPlus2(a); setAsiPlus1(b); }}
+                        />
+                        +2 {ABILITY_LABELS[a]}, +1 {ABILITY_LABELS[b]}
+                      </label>
+                    ))
+                  )}
                   <label className="flex items-center gap-2 text-sm">
-                    <input type="radio" checked={asiVariant === 'twoOne'} onChange={() => setAsiVariant('twoOne')} />
-                    +2 {ABILITY_LABELS[selectedBackground.abilityScoreIncreases.twoOne.plus2]}, +1 {ABILITY_LABELS[selectedBackground.abilityScoreIncreases.twoOne.plus1]}
-                  </label>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="radio" checked={asiVariant === 'threeOne'} onChange={() => setAsiVariant('threeOne')} />
-                    +1 each: {selectedBackground.abilityScoreIncreases.threeOne.map((a) => ABILITY_LABELS[a]).join(', ')}
+                    <input
+                      type="radio"
+                      name="asi"
+                      checked={asiMode === 'threeOne'}
+                      onChange={() => { setAsiMode('threeOne'); setAsiPlus2(null); setAsiPlus1(null); }}
+                    />
+                    +1 each: {selectedBackground.abilityScoreIncreases.abilities.map((a) => ABILITY_LABELS[a]).join(', ')}
                   </label>
                 </div>
               </div>
