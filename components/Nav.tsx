@@ -17,7 +17,7 @@ export default function Nav() {
     <header className="border-b border-ink/10 bg-white/60 backdrop-blur">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3">
         <Link href="/" className="heading text-xl text-blood">
-          D&amp;D Companion
+          D&amp;D Companion <span className="text-xs text-ink/40 font-normal">2024</span>
         </Link>
         <nav className="flex flex-wrap gap-1">
           {links.map((l) => {

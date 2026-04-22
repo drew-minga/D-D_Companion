@@ -8,12 +8,13 @@ interface Props {
   fetcher: () => Promise<ApiList>;
   onSelect: (ref: ApiRef) => void;
   selectedIndex?: string | null;
+  initialQuery?: string;
 }
 
-export default function LookupList({ title, fetcher, onSelect, selectedIndex }: Props) {
+export default function LookupList({ title, fetcher, onSelect, selectedIndex, initialQuery = '' }: Props) {
   const [data, setData] = useState<ApiRef[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
 
   useEffect(() => {
     let cancelled = false;

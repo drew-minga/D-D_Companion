@@ -167,7 +167,9 @@ function CharacterEditor() {
             {Object.values(CLASSES_MAP).map((c) => (
               <option key={c.id} value={c.name}>{c.name}</option>
             ))}
-            <option value={character.class && !Object.values(CLASSES_MAP).find((c) => c.name === character.class) ? character.class : '__custom'}>{character.class && !Object.values(CLASSES_MAP).find((c) => c.name === character.class) ? character.class : 'Other…'}</option>
+            {character.class && !Object.values(CLASSES_MAP).find((c) => c.name === character.class) && (
+              <option value={character.class}>{character.class}</option>
+            )}
           </select>
         </div>
         <div>
@@ -192,9 +194,9 @@ function CharacterEditor() {
             {Object.values(SPECIES_MAP).map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
-            <option value={character.species && !SPECIES_MAP[character.species ?? ''] ? character.species : '__custom'}>
-              {character.species && !SPECIES_MAP[character.species ?? ''] ? character.species : 'Other…'}
-            </option>
+            {character.species && !SPECIES_MAP[character.species] && (
+              <option value={character.species}>{character.species}</option>
+            )}
           </select>
         </div>
         <div>
