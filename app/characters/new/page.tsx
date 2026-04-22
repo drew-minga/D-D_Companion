@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocalState } from '@/lib/storage';
 import { createCharacterFromWizard, type WizardOutput } from '@/lib/characters';
 import type { Ability, Character } from '@/lib/types';
-import { ABILITIES, ABILITY_LABELS } from '@/lib/types';
+import { ABILITIES, ABILITY_LABELS, SKILLS } from '@/lib/types';
 import { abilityModifier, proficiencyBonus } from '@/lib/dice';
 import { SPECIES } from '@/lib/data/species';
 import { CLASSES } from '@/lib/data/classes';
@@ -22,6 +22,18 @@ const ALIGNMENTS = [
 
 function fmt(n: number) {
   return n >= 0 ? `+${n}` : `${n}`;
+}
+
+function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
+  return (
+    <span className="relative group/tip inline-flex items-center">
+      {children}
+      <span className="pointer-events-none absolute bottom-full left-0 mb-1.5 z-20 hidden group-hover/tip:block w-56 rounded-md bg-ink text-parchment text-xs px-2.5 py-2 shadow-lg leading-snug">
+        {text}
+        <span className="absolute top-full left-3 -mt-px border-4 border-transparent border-t-ink" />
+      </span>
+    </span>
+  );
 }
 
 function StepIndicator({ current, total }: { current: number; total: number }) {
@@ -47,17 +59,23 @@ export default function NewCharacterPage() {
   const [name, setName] = useState('');
   const [alignment, setAlignment] = useState('');
   const [speciesId, setSpeciesId] = useState('');
+  const [lineageId, setLineageId] = useState('');
   const [classId, setClassId] = useState('');
   const [chosenClassSkills, setChosenClassSkills] = useState<string[]>([]);
   const [backgroundId, setBackgroundId] = useState('');
-  const [asiVariant, setAsiVariant] = useState<'twoOne' | 'threeOne'>('twoOne');
+  const [asiMode, setAsiMode] = useState<'twoOne' | 'threeOne'>('twoOne');
+  const [asiPlus2, setAsiPlus2] = useState<Ability | null>(null);
+  const [asiPlus1, setAsiPlus1] = useState<Ability | null>(null);
   const [baseAbilities, setBaseAbilities] = useState<Record<Ability, number>>({
     str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8,
   });
   const [arrayAssignments, setArrayAssignments] = useState<Record<Ability, number | null>>({
     str: null, dex: null, con: null, int: null, wis: null, cha: null,
   });
-  const [abilityMode, setAbilityMode] = useState<'array' | 'manual'>('array');
+  const [abilityMode, setAbilityMode] = useState<'array' | 'manual' | 'roll'>('array');
+  const [rollDice, setRollDice] = useState<Record<Ability, number[]>>(
+    { str: [], dex: [], con: [], int: [], wis: [], cha: [] },
+  );
 
   const selectedSpecies = SPECIES.find((s) => s.id === speciesId);
   const selectedClass = CLASSES.find((c) => c.id === classId);
@@ -67,11 +85,20 @@ export default function NewCharacterPage() {
 
   function canProceed(): boolean {
     if (step === 0) return name.trim().length > 0;
-    if (step === 1) return speciesId !== '';
+    if (step === 1) {
+      if (!speciesId) return false;
+      if (selectedSpecies?.lineages && selectedSpecies.lineages.length > 0) return lineageId !== '';
+      return true;
+    }
     if (step === 2) return classId !== '' && chosenClassSkills.length === (selectedClass?.skillChoiceCount ?? 0);
-    if (step === 3) return backgroundId !== '';
+    if (step === 3) {
+      if (!backgroundId) return false;
+      if (asiMode === 'twoOne') return asiPlus2 !== null && asiPlus1 !== null;
+      return true;
+    }
     if (step === 4) {
       if (abilityMode === 'array') return Object.values(arrayAssignments).every((v) => v !== null);
+      if (abilityMode === 'roll') return ABILITIES.every((ab) => rollDice[ab].length > 0);
       return true;
     }
     return true;
@@ -104,6 +131,40 @@ export default function NewCharacterPage() {
     });
   }
 
+  function d6(): number {
+    if (typeof crypto !== 'undefined' && 'getRandomValues' in crypto) {
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      return (buf[0] % 6) + 1;
+    }
+    return Math.floor(Math.random() * 6) + 1;
+  }
+
+  function roll4d6(): { dice: number[]; score: number } {
+    const dice = [d6(), d6(), d6(), d6()];
+    const sorted = [...dice].sort((a, b) => a - b);
+    const score = sorted[1] + sorted[2] + sorted[3]; // drop sorted[0] (lowest)
+    return { dice, score };
+  }
+
+  function rollSingle(ab: Ability) {
+    const { dice, score } = roll4d6();
+    setRollDice((prev) => ({ ...prev, [ab]: dice }));
+    setBaseAbilities((prev) => ({ ...prev, [ab]: score }));
+  }
+
+  function rollAllAbilities() {
+    const newDice = { ...rollDice };
+    const newScores = { ...baseAbilities };
+    for (const ab of ABILITIES) {
+      const { dice, score } = roll4d6();
+      newDice[ab] = dice;
+      newScores[ab] = score;
+    }
+    setRollDice(newDice);
+    setBaseAbilities(newScores);
+  }
+
   function getEffectiveAbilities(): Record<Ability, number> {
     const base: Record<Ability, number> = abilityMode === 'array'
       ? { ...baseAbilities }
@@ -121,12 +182,11 @@ export default function NewCharacterPage() {
     const base = getEffectiveAbilities();
     if (!selectedBackground) return base;
     const result = { ...base };
-    if (asiVariant === 'twoOne') {
-      const { plus2, plus1 } = selectedBackground.abilityScoreIncreases.twoOne;
-      result[plus2] = (result[plus2] ?? 10) + 2;
-      result[plus1] = (result[plus1] ?? 10) + 1;
-    } else {
-      for (const ab of selectedBackground.abilityScoreIncreases.threeOne) {
+    if (asiMode === 'twoOne' && asiPlus2 && asiPlus1) {
+      result[asiPlus2] = (result[asiPlus2] ?? 10) + 2;
+      result[asiPlus1] = (result[asiPlus1] ?? 10) + 1;
+    } else if (asiMode === 'threeOne') {
+      for (const ab of selectedBackground.abilityScoreIncreases.abilities) {
         result[ab] = (result[ab] ?? 10) + 1;
       }
     }
@@ -142,14 +202,24 @@ export default function NewCharacterPage() {
     const output: WizardOutput = {
       name,
       speciesId,
+      lineageId,
       classId,
       backgroundId,
       alignment,
       baseAbilities: effectiveAbilities,
-      asiVariant,
+      asiMode,
+      asiPlus2,
+      asiPlus1,
       chosenClassSkills,
     };
     const newChar = createCharacterFromWizard(output);
+    // Write synchronously to avoid race condition where router.push navigates
+    // before the useEffect-driven localStorage write completes.
+    try {
+      const raw = localStorage.getItem('dndc:characters');
+      const existing: Character[] = raw ? (JSON.parse(raw) as Character[]) : [];
+      localStorage.setItem('dndc:characters', JSON.stringify([newChar, ...existing]));
+    } catch { /* ignore — setCharacters below will still update in-memory state */ }
     setCharacters((cs) => [newChar, ...cs]);
     router.push(`/characters/edit/?id=${newChar.id}`);
   }
@@ -203,7 +273,7 @@ export default function NewCharacterPage() {
             {SPECIES.map((sp) => (
               <button
                 key={sp.id}
-                onClick={() => setSpeciesId(sp.id)}
+                onClick={() => { setSpeciesId(sp.id); setLineageId(''); }}
                 className={`card text-left transition-all ${
                   speciesId === sp.id ? 'ring-2 ring-gold bg-gold/10' : 'hover:bg-white/80'
                 }`}
@@ -216,17 +286,60 @@ export default function NewCharacterPage() {
           </div>
 
           {selectedSpecies && (
-            <div className="card bg-parchment/60">
-              <h3 className="heading text-lg text-blood">{selectedSpecies.name}</h3>
-              <p className="text-xs text-ink/50 mb-3">{selectedSpecies.size} · Speed {selectedSpecies.speed} ft. · Languages: {selectedSpecies.languages.join(', ')}</p>
-              <div className="space-y-2">
-                {selectedSpecies.traits.map((t) => (
-                  <div key={t.name}>
-                    <span className="text-sm font-semibold">{t.name}. </span>
-                    <span className="text-sm text-ink/80">{t.description}</span>
-                  </div>
-                ))}
+            <div className="card bg-parchment/60 space-y-4">
+              <div>
+                <h3 className="heading text-lg text-blood">{selectedSpecies.name}</h3>
+                <p className="text-xs text-ink/50 mb-3">{selectedSpecies.size} · Speed {selectedSpecies.speed} ft. · Languages: {selectedSpecies.languages.join(', ')}</p>
+                <div className="space-y-2">
+                  {selectedSpecies.traits.map((t) => (
+                    <div key={t.name}>
+                      <span className="text-sm font-semibold">{t.name}. </span>
+                      <span className="text-sm text-ink/80">{t.description}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
+
+              {selectedSpecies.lineages && selectedSpecies.lineages.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold mb-2 text-blood">
+                    Choose your {selectedSpecies.id === 'dragonborn' ? 'Draconic Ancestry' : 'Lineage'}:
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {selectedSpecies.lineages.map((lg) => (
+                      <button
+                        key={lg.id}
+                        onClick={() => setLineageId(lg.id)}
+                        className={`text-left rounded-md border px-3 py-2 text-sm transition-all ${
+                          lineageId === lg.id
+                            ? 'border-blood bg-blood/10 ring-1 ring-blood/40'
+                            : 'border-ink/15 bg-white/60 hover:bg-white'
+                        }`}
+                      >
+                        <div className="font-semibold">{lg.name}</div>
+                        <div className="text-xs text-ink/60 mt-0.5">{lg.description}</div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {lineageId && (() => {
+                    const lg = selectedSpecies.lineages!.find((l) => l.id === lineageId);
+                    return lg ? (
+                      <div className="mt-3 space-y-1.5 border-t border-ink/10 pt-3">
+                        <p className="text-xs font-semibold text-ink/60 uppercase tracking-wide">
+                          {lg.name} Traits
+                        </p>
+                        {lg.traits.map((t) => (
+                          <div key={t.name}>
+                            <span className="text-sm font-semibold">{t.name}. </span>
+                            <span className="text-sm text-ink/80">{t.description}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -272,6 +385,7 @@ export default function NewCharacterPage() {
                     const alreadyFromBg = selectedBackground?.skillProficiencies.includes(sk) ?? false;
                     const checked = chosenClassSkills.includes(sk) || alreadyFromBg;
                     const disabled = alreadyFromBg || (!chosenClassSkills.includes(sk) && chosenClassSkills.length >= selectedClass.skillChoiceCount);
+                    const skillDef = SKILLS.find((s) => s.key === sk);
                     return (
                       <label key={sk} className={`flex items-center gap-2 text-sm rounded px-2 py-1 ${disabled && !alreadyFromBg ? 'opacity-40' : ''} ${alreadyFromBg ? 'text-ink/40 italic' : ''}`}>
                         <input
@@ -280,7 +394,15 @@ export default function NewCharacterPage() {
                           disabled={disabled}
                           onChange={() => !alreadyFromBg && handleClassSkillToggle(sk)}
                         />
-                        <span className="capitalize">{sk.replace(/-/g, ' ')}</span>
+                        {skillDef?.description ? (
+                          <Tooltip text={`${ABILITY_LABELS[skillDef.ability]} — ${skillDef.description}`}>
+                            <span className="capitalize underline decoration-dotted decoration-ink/30 cursor-help">
+                              {sk.replace(/-/g, ' ')}
+                            </span>
+                          </Tooltip>
+                        ) : (
+                          <span className="capitalize">{sk.replace(/-/g, ' ')}</span>
+                        )}
                         {alreadyFromBg && <span className="text-xs">(from background)</span>}
                       </label>
                     );
@@ -317,14 +439,25 @@ export default function NewCharacterPage() {
               return (
                 <button
                   key={bg.id}
-                  onClick={() => setBackgroundId(bg.id)}
-                  className={`card text-left transition-all ${
+                  onClick={() => { setBackgroundId(bg.id); setAsiMode('twoOne'); setAsiPlus2(null); setAsiPlus1(null); }}
+                  className={`card text-left transition-all relative group/bgcard ${
                     backgroundId === bg.id ? 'ring-2 ring-gold bg-gold/10' : 'hover:bg-white/80'
                   }`}
                 >
                   <div className="heading text-base text-blood">{bg.name}</div>
                   <div className="text-xs text-ink/60 mt-1">{bg.skillProficiencies.join(', ').replace(/-/g, ' ')}</div>
                   <div className="text-xs text-ink/50 mt-1">Feat: {feat?.name ?? bg.originFeatId}</div>
+                  <span className="pointer-events-none absolute bottom-full left-0 mb-2 z-30 hidden group-hover/bgcard:block w-64 rounded-md bg-ink text-parchment text-xs px-3 py-2.5 shadow-xl leading-snug text-left">
+                    <span className="block font-semibold mb-1">{bg.name}</span>
+                    <span className="block text-parchment/80 mb-1.5">{bg.description}</span>
+                    {bg.feature && (
+                      <span className="block border-t border-white/20 pt-1.5 mt-1.5">
+                        <span className="font-semibold">{bg.feature.name}:</span>{' '}
+                        <span className="text-parchment/80">{bg.feature.description.slice(0, 100)}{bg.feature.description.length > 100 ? '…' : ''}</span>
+                      </span>
+                    )}
+                    <span className="absolute top-full left-4 -mt-px border-4 border-transparent border-t-ink" />
+                  </span>
                 </button>
               );
             })}
@@ -336,15 +469,29 @@ export default function NewCharacterPage() {
               <p className="text-sm text-ink/70">{selectedBackground.description}</p>
 
               <div>
-                <p className="text-sm font-semibold mb-1">Ability Score Increases — choose distribution:</p>
-                <div className="flex gap-3">
+                <p className="text-sm font-semibold mb-2">Ability Score Increases — choose distribution:</p>
+                <div className="space-y-1">
+                  {selectedBackground.abilityScoreIncreases.abilities.flatMap((a, i, arr) =>
+                    arr.filter((_, j) => j !== i).map((b) => (
+                      <label key={`${a}-${b}`} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="radio"
+                          name="asi"
+                          checked={asiMode === 'twoOne' && asiPlus2 === a && asiPlus1 === b}
+                          onChange={() => { setAsiMode('twoOne'); setAsiPlus2(a); setAsiPlus1(b); }}
+                        />
+                        +2 {ABILITY_LABELS[a]}, +1 {ABILITY_LABELS[b]}
+                      </label>
+                    ))
+                  )}
                   <label className="flex items-center gap-2 text-sm">
-                    <input type="radio" checked={asiVariant === 'twoOne'} onChange={() => setAsiVariant('twoOne')} />
-                    +2 {ABILITY_LABELS[selectedBackground.abilityScoreIncreases.twoOne.plus2]}, +1 {ABILITY_LABELS[selectedBackground.abilityScoreIncreases.twoOne.plus1]}
-                  </label>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="radio" checked={asiVariant === 'threeOne'} onChange={() => setAsiVariant('threeOne')} />
-                    +1 each: {selectedBackground.abilityScoreIncreases.threeOne.map((a) => ABILITY_LABELS[a]).join(', ')}
+                    <input
+                      type="radio"
+                      name="asi"
+                      checked={asiMode === 'threeOne'}
+                      onChange={() => { setAsiMode('threeOne'); setAsiPlus2(null); setAsiPlus1(null); }}
+                    />
+                    +1 each: {selectedBackground.abilityScoreIncreases.abilities.map((a) => ABILITY_LABELS[a]).join(', ')}
                   </label>
                 </div>
               </div>
@@ -382,35 +529,63 @@ export default function NewCharacterPage() {
       {/* Step 4: Abilities */}
       {step === 4 && (
         <div className="space-y-4">
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4">
             <label className="flex items-center gap-2 text-sm">
-              <input type="radio" checked={abilityMode === 'array'} onChange={() => setAbilityMode('array')} />
+              <input type="radio" name="abilityMode" checked={abilityMode === 'array'} onChange={() => setAbilityMode('array')} />
               Standard Array (15, 14, 13, 12, 10, 8)
             </label>
             <label className="flex items-center gap-2 text-sm">
-              <input type="radio" checked={abilityMode === 'manual'} onChange={() => setAbilityMode('manual')} />
+              <input type="radio" name="abilityMode" checked={abilityMode === 'roll'} onChange={() => setAbilityMode('roll')} />
+              Roll 4d6 Drop Lowest
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="radio" name="abilityMode" checked={abilityMode === 'manual'} onChange={() => setAbilityMode('manual')} />
               Manual Entry
             </label>
           </div>
 
           <div className="card">
-            <h3 className="heading text-base mb-3">Assign Ability Scores</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="heading text-base">Assign Ability Scores</h3>
+              {abilityMode === 'roll' && (
+                <button onClick={rollAllAbilities} className="btn-gold text-sm px-3 py-1">
+                  ↻ Roll All 6
+                </button>
+              )}
+            </div>
             {selectedBackground && (
               <p className="text-xs text-ink/60 mb-3">
                 Background ASIs (+2/+1 or three +1s) are previewed below but applied at character creation.
               </p>
             )}
+            {abilityMode === 'roll' && (
+              <p className="text-xs text-ink/60 mb-3">
+                Roll 4d6 for each ability — the lowest die is dropped automatically.
+              </p>
+            )}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {ABILITIES.map((ab) => {
                 const previewScore = getPreviewAbilities()[ab];
+                const dice = rollDice[ab];
+                const hasRolled = dice.length > 0;
+                const sortedDice = hasRolled ? [...dice].sort((a, b) => a - b) : [];
+                const rolledBase = hasRolled ? sortedDice[1] + sortedDice[2] + sortedDice[3] : 0;
                 const baseScore = abilityMode === 'array'
                   ? (arrayAssignments[ab] ?? 8)
                   : (baseAbilities[ab] ?? 10);
-                const asiBonus = previewScore - baseScore;
+                const asiBonus = previewScore - (abilityMode === 'roll' ? rolledBase : baseScore);
                 return (
                   <div key={ab} className="rounded-md border border-ink/15 bg-white/70 p-3">
-                    <div className="label mb-1">{ABILITY_LABELS[ab]}</div>
-                    {abilityMode === 'array' ? (
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="label">{ABILITY_LABELS[ab]}</div>
+                      {abilityMode === 'roll' && (
+                        <button onClick={() => rollSingle(ab)} className="btn text-xs py-0.5 px-2">
+                          {hasRolled ? '↻ Reroll' : '↻ Roll'}
+                        </button>
+                      )}
+                    </div>
+
+                    {abilityMode === 'array' && (
                       <select
                         className="input"
                         value={arrayAssignments[ab] ?? ''}
@@ -423,7 +598,9 @@ export default function NewCharacterPage() {
                           </option>
                         ))}
                       </select>
-                    ) : (
+                    )}
+
+                    {abilityMode === 'manual' && (
                       <input
                         type="number"
                         min={3}
@@ -433,10 +610,37 @@ export default function NewCharacterPage() {
                         onChange={(e) => setBaseAbilities((prev) => ({ ...prev, [ab]: Math.max(3, Math.min(18, parseInt(e.target.value || '10', 10))) }))}
                       />
                     )}
-                    <div className="mt-1 text-center">
-                      <span className="heading text-xl">{previewScore}</span>
-                      {asiBonus > 0 && <span className="text-xs text-green-700 ml-1">(+{asiBonus} bg)</span>}
-                      <span className="text-xs text-ink/50 ml-2">{fmt(abilityModifier(previewScore))}</span>
+
+                    {abilityMode === 'roll' && (
+                      hasRolled ? (
+                        <div className="flex gap-1 flex-wrap mt-1">
+                          {sortedDice.map((d, i) => (
+                            <span
+                              key={i}
+                              title={i === 0 ? 'Dropped (lowest)' : 'Kept'}
+                              className={`inline-flex items-center justify-center w-7 h-7 rounded border text-sm font-bold ${
+                                i === 0
+                                  ? 'text-ink/25 border-ink/15 bg-white/40 line-through'
+                                  : 'text-ink border-ink/40 bg-white'
+                              }`}
+                            >
+                              {d}
+                            </span>
+                          ))}
+                          <span className="text-xs text-ink/50 self-center ml-1">= {rolledBase}</span>
+                        </div>
+                      ) : (
+                        <div className="text-center text-ink/35 text-sm py-1">— not rolled —</div>
+                      )
+                    )}
+
+                    <div className="mt-2 text-center">
+                      <span className="heading text-xl">{abilityMode === 'roll' && !hasRolled ? '?' : previewScore}</span>
+                      {asiBonus > 0 && hasRolled && <span className="text-xs text-green-700 ml-1">(+{asiBonus} bg)</span>}
+                      {asiBonus > 0 && abilityMode !== 'roll' && <span className="text-xs text-green-700 ml-1">(+{asiBonus} bg)</span>}
+                      {(abilityMode !== 'roll' || hasRolled) && (
+                        <span className="text-xs text-ink/50 ml-2">{fmt(abilityModifier(previewScore))}</span>
+                      )}
                     </div>
                   </div>
                 );

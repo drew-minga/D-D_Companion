@@ -39,6 +39,7 @@ export function newCharacter(): Character {
     inventory: [],
     notes: '',
     species: '',
+    speciesLineage: '',
     subclass: '',
     exhaustion: 0,
     heroicInspiration: false,
@@ -79,11 +80,14 @@ export function migrateCharacter(c: unknown): Character {
 export interface WizardOutput {
   name: string;
   speciesId: string;
+  lineageId: string;
   classId: string;
   backgroundId: string;
   alignment: string;
   baseAbilities: Record<Ability, number>;
-  asiVariant: 'twoOne' | 'threeOne';
+  asiMode: 'twoOne' | 'threeOne';
+  asiPlus2: Ability | null;
+  asiPlus1: Ability | null;
   chosenClassSkills: string[];
 }
 
@@ -102,12 +106,11 @@ export function createCharacterFromWizard(input: WizardOutput): Character {
   // Apply background ASI to base scores
   const abilities = { ...input.baseAbilities };
   if (backgroundDef) {
-    if (input.asiVariant === 'twoOne') {
-      const { plus2, plus1 } = backgroundDef.abilityScoreIncreases.twoOne;
-      abilities[plus2] = (abilities[plus2] ?? 10) + 2;
-      abilities[plus1] = (abilities[plus1] ?? 10) + 1;
-    } else {
-      for (const ab of backgroundDef.abilityScoreIncreases.threeOne) {
+    if (input.asiMode === 'twoOne' && input.asiPlus2 && input.asiPlus1) {
+      abilities[input.asiPlus2] = (abilities[input.asiPlus2] ?? 10) + 2;
+      abilities[input.asiPlus1] = (abilities[input.asiPlus1] ?? 10) + 1;
+    } else if (input.asiMode === 'threeOne') {
+      for (const ab of backgroundDef.abilityScoreIncreases.abilities) {
         abilities[ab] = (abilities[ab] ?? 10) + 1;
       }
     }
@@ -128,6 +131,7 @@ export function createCharacterFromWizard(input: WizardOutput): Character {
     name: input.name || 'New Adventurer',
     race: speciesDef?.name ?? input.speciesId,
     species: input.speciesId,
+    speciesLineage: input.lineageId,
     class: classDef?.name ?? input.classId,
     subclass: '',
     level: 1,

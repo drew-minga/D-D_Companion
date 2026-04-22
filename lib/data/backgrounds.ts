@@ -1,10 +1,9 @@
 import type { Ability } from '../types';
 
 export interface BackgroundASI {
-  /** Standard variant: +2 to one ability, +1 to another */
-  twoOne: { plus2: Ability; plus1: Ability };
-  /** Flexible variant: +1 to three different abilities */
-  threeOne: [Ability, Ability, Ability];
+  /** The three ability scores this background's bonuses are distributed among.
+   *  Player chooses: +2 to one + +1 to another, OR +1 to all three. */
+  abilities: [Ability, Ability, Ability];
 }
 
 export interface Background {
@@ -24,10 +23,9 @@ export const BACKGROUNDS: Background[] = [
     id: 'acolyte',
     name: 'Acolyte',
     description: 'You have spent your life in service to a temple, learning sacred rites and providing sanctified support to worshipers.',
-    abilityScoreIncreases: { twoOne: { plus2: 'wis', plus1: 'int' }, threeOne: ['str', 'wis', 'int'] },
+    abilityScoreIncreases: { abilities: ['int', 'wis', 'cha'] },
     originFeatId: 'magic-initiate',
     skillProficiencies: ['insight', 'religion'],
-    toolProficiency: undefined,
     languageProficiency: 'Two languages of your choice',
     feature: {
       name: 'Shelter of the Faithful',
@@ -38,7 +36,7 @@ export const BACKGROUNDS: Background[] = [
     id: 'artisan',
     name: 'Artisan',
     description: 'You have spent years learning the skills of a master artisan, developing expertise in creating and repairing goods.',
-    abilityScoreIncreases: { twoOne: { plus2: 'int', plus1: 'cha' }, threeOne: ['str', 'int', 'cha'] },
+    abilityScoreIncreases: { abilities: ['str', 'dex', 'int'] },
     originFeatId: 'crafter',
     skillProficiencies: ['investigation', 'persuasion'],
     toolProficiency: 'One type of Artisan\'s Tools of your choice',
@@ -51,7 +49,7 @@ export const BACKGROUNDS: Background[] = [
     id: 'charlatan',
     name: 'Charlatan',
     description: 'You have always had a way with people — knowing what they want to hear and how to get them to believe it.',
-    abilityScoreIncreases: { twoOne: { plus2: 'cha', plus1: 'dex' }, threeOne: ['con', 'dex', 'cha'] },
+    abilityScoreIncreases: { abilities: ['dex', 'con', 'cha'] },
     originFeatId: 'skilled',
     skillProficiencies: ['deception', 'sleight-of-hand'],
     toolProficiency: 'Forgery Kit',
@@ -64,7 +62,7 @@ export const BACKGROUNDS: Background[] = [
     id: 'criminal',
     name: 'Criminal',
     description: 'You are an experienced criminal with a history of breaking the law. Your time spent on the shady side of society has taught you many useful skills.',
-    abilityScoreIncreases: { twoOne: { plus2: 'dex', plus1: 'int' }, threeOne: ['dex', 'con', 'int'] },
+    abilityScoreIncreases: { abilities: ['dex', 'con', 'int'] },
     originFeatId: 'alert',
     skillProficiencies: ['deception', 'stealth'],
     toolProficiency: 'Thieves\' Tools',
@@ -77,7 +75,7 @@ export const BACKGROUNDS: Background[] = [
     id: 'entertainer',
     name: 'Entertainer',
     description: 'You thrive in front of an audience. You know how to entrance them, entertain them, and even inspire them.',
-    abilityScoreIncreases: { twoOne: { plus2: 'cha', plus1: 'dex' }, threeOne: ['str', 'dex', 'cha'] },
+    abilityScoreIncreases: { abilities: ['str', 'dex', 'cha'] },
     originFeatId: 'tavern-brawler',
     skillProficiencies: ['acrobatics', 'performance'],
     toolProficiency: 'One type of Musical Instrument of your choice',
@@ -90,7 +88,7 @@ export const BACKGROUNDS: Background[] = [
     id: 'farmer',
     name: 'Farmer',
     description: 'You grew up connected to the land, working fields and tending animals. Hard work and perseverance are values you learned early.',
-    abilityScoreIncreases: { twoOne: { plus2: 'con', plus1: 'wis' }, threeOne: ['str', 'con', 'wis'] },
+    abilityScoreIncreases: { abilities: ['str', 'con', 'wis'] },
     originFeatId: 'tough',
     skillProficiencies: ['animal-handling', 'nature'],
     toolProficiency: 'Carpenter\'s Tools',
@@ -103,7 +101,7 @@ export const BACKGROUNDS: Background[] = [
     id: 'guard',
     name: 'Guard',
     description: 'Your training focused on standing watch and protecting something — a person, a place, or a caravan. You are accustomed to vigilance and routine.',
-    abilityScoreIncreases: { twoOne: { plus2: 'str', plus1: 'int' }, threeOne: ['str', 'int', 'wis'] },
+    abilityScoreIncreases: { abilities: ['str', 'int', 'wis'] },
     originFeatId: 'alert',
     skillProficiencies: ['athletics', 'perception'],
     toolProficiency: 'Gaming Set of your choice',
@@ -116,7 +114,7 @@ export const BACKGROUNDS: Background[] = [
     id: 'guide',
     name: 'Guide',
     description: 'You grew up in the wilderness, learning to navigate difficult terrain and survive far from civilization.',
-    abilityScoreIncreases: { twoOne: { plus2: 'wis', plus1: 'dex' }, threeOne: ['dex', 'con', 'wis'] },
+    abilityScoreIncreases: { abilities: ['dex', 'con', 'wis'] },
     originFeatId: 'magic-initiate',
     skillProficiencies: ['stealth', 'survival'],
     toolProficiency: 'Cartographer\'s Tools',
@@ -129,7 +127,7 @@ export const BACKGROUNDS: Background[] = [
     id: 'hermit',
     name: 'Hermit',
     description: 'You lived in seclusion for a formative part of your life. Solitude and contemplation gave you unique insight into nature or the divine.',
-    abilityScoreIncreases: { twoOne: { plus2: 'wis', plus1: 'con' }, threeOne: ['int', 'con', 'wis'] },
+    abilityScoreIncreases: { abilities: ['con', 'int', 'wis'] },
     originFeatId: 'magic-initiate',
     skillProficiencies: ['medicine', 'religion'],
     toolProficiency: 'Herbalism Kit',
@@ -142,7 +140,7 @@ export const BACKGROUNDS: Background[] = [
     id: 'merchant',
     name: 'Merchant',
     description: 'You spent years working as a merchant or trading with others, learning the value of goods and the art of negotiation.',
-    abilityScoreIncreases: { twoOne: { plus2: 'cha', plus1: 'int' }, threeOne: ['int', 'wis', 'cha'] },
+    abilityScoreIncreases: { abilities: ['con', 'int', 'cha'] },
     originFeatId: 'lucky',
     skillProficiencies: ['insight', 'persuasion'],
     toolProficiency: 'Navigator\'s Tools',
@@ -155,7 +153,7 @@ export const BACKGROUNDS: Background[] = [
     id: 'noble',
     name: 'Noble',
     description: 'You understand wealth, power, and privilege. You carry a noble title, and your family owns land, collects taxes, and wields significant political influence.',
-    abilityScoreIncreases: { twoOne: { plus2: 'cha', plus1: 'int' }, threeOne: ['int', 'wis', 'cha'] },
+    abilityScoreIncreases: { abilities: ['int', 'wis', 'cha'] },
     originFeatId: 'skilled',
     skillProficiencies: ['history', 'persuasion'],
     toolProficiency: 'Gaming Set of your choice',
@@ -169,10 +167,9 @@ export const BACKGROUNDS: Background[] = [
     id: 'sage',
     name: 'Sage',
     description: 'You spent years learning the lore of the multiverse. You scoured manuscripts, studied scrolls, and listened to the greatest experts on the subjects that interest you.',
-    abilityScoreIncreases: { twoOne: { plus2: 'int', plus1: 'wis' }, threeOne: ['str', 'int', 'wis'] },
+    abilityScoreIncreases: { abilities: ['con', 'int', 'wis'] },
     originFeatId: 'magic-initiate',
     skillProficiencies: ['arcana', 'history'],
-    toolProficiency: undefined,
     languageProficiency: 'Two languages of your choice',
     feature: {
       name: 'Researcher',
@@ -183,7 +180,7 @@ export const BACKGROUNDS: Background[] = [
     id: 'sailor',
     name: 'Sailor',
     description: 'You sailed on a seagoing vessel for years. In that time, you faced down mighty storms, monsters of the deep, and those who wanted to sink your craft to the bottomless depths.',
-    abilityScoreIncreases: { twoOne: { plus2: 'dex', plus1: 'wis' }, threeOne: ['str', 'dex', 'wis'] },
+    abilityScoreIncreases: { abilities: ['str', 'dex', 'wis'] },
     originFeatId: 'tavern-brawler',
     skillProficiencies: ['athletics', 'perception'],
     toolProficiency: 'Navigator\'s Tools',
@@ -196,7 +193,7 @@ export const BACKGROUNDS: Background[] = [
     id: 'scribe',
     name: 'Scribe',
     description: 'You spent formative years in a scriptorium, chronicling knowledge for posterity and perfecting the craft of writing.',
-    abilityScoreIncreases: { twoOne: { plus2: 'int', plus1: 'dex' }, threeOne: ['dex', 'int', 'wis'] },
+    abilityScoreIncreases: { abilities: ['dex', 'int', 'wis'] },
     originFeatId: 'skilled',
     skillProficiencies: ['investigation', 'perception'],
     toolProficiency: 'Calligrapher\'s Supplies',
@@ -210,7 +207,7 @@ export const BACKGROUNDS: Background[] = [
     id: 'soldier',
     name: 'Soldier',
     description: 'War has been your life for as long as you care to remember. You trained as a youth, studied the use of weapons and armor, learned basic survival techniques, including how to stay alive on the battlefield.',
-    abilityScoreIncreases: { twoOne: { plus2: 'str', plus1: 'con' }, threeOne: ['str', 'dex', 'con'] },
+    abilityScoreIncreases: { abilities: ['str', 'dex', 'con'] },
     originFeatId: 'savage-attacker',
     skillProficiencies: ['athletics', 'intimidation'],
     toolProficiency: 'Gaming Set of your choice',
@@ -223,7 +220,7 @@ export const BACKGROUNDS: Background[] = [
     id: 'wayfarer',
     name: 'Wayfarer',
     description: 'You grew up among people who had no fixed home, traveling as the seasons changed, following game and fertile land.',
-    abilityScoreIncreases: { twoOne: { plus2: 'dex', plus1: 'wis' }, threeOne: ['dex', 'int', 'wis'] },
+    abilityScoreIncreases: { abilities: ['dex', 'wis', 'cha'] },
     originFeatId: 'lucky',
     skillProficiencies: ['insight', 'stealth'],
     toolProficiency: 'Thieves\' Tools',
