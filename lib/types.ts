@@ -97,6 +97,7 @@ export interface Character {
   currency?: Currency;
   spellSlots?: SpellSlotState;
   pactSlots?: PactSlotState;
+  knownCantrips?: string[];
   knownSpells?: string[];
   feats?: CharacterFeat[];
   toolProficiencies?: string[];

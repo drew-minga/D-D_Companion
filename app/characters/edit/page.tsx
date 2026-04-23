@@ -1,21 +1,43 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useLocalState } from '@/lib/storage';
 import { abilityModifier, proficiencyBonus, roll, uid } from '@/lib/dice';
 import type { Ability, Character, RollResult } from '@/lib/types';
 import { ABILITIES, ABILITY_LABELS, SKILLS } from '@/lib/types';
-import { migrateCharacter } from '@/lib/characters';
+import { migrateCharacter, levelUpCharacter, type LevelUpChoices } from '@/lib/characters';
 import { SPECIES_MAP } from '@/lib/data/species';
-import { CLASSES_MAP, getFeaturesUpToLevel } from '@/lib/data/classes';
+import { CLASSES_MAP, getFeaturesUpToLevel, getCantripCountAtLevel } from '@/lib/data/classes';
 import { FEATS_MAP } from '@/lib/data/feats';
 import { getCasterType, getSlotsForClass, PACT_SLOTS } from '@/lib/data/spellSlots';
+import { CANTRIP_DATA } from '@/lib/data/cantrips';
 
 function fmt(n: number): string {
   return n >= 0 ? `+${n}` : `${n}`;
 }
+
+function Tip({ text, children }: { text: string; children: React.ReactNode }) {
+  return (
+    <span className="relative group/etip inline-flex items-center cursor-help">
+      {children}
+      <span className="pointer-events-none absolute bottom-full left-0 mb-1.5 z-30 hidden group-hover/etip:block w-64 rounded-md bg-ink text-parchment text-xs px-2.5 py-2 shadow-lg leading-snug">
+        {text}
+        <span className="absolute top-full left-3 -mt-px border-4 border-transparent border-t-ink" />
+      </span>
+    </span>
+  );
+}
+
+const ABILITY_TIPS: Record<Ability, string> = {
+  str: 'Strength — Melee attack rolls, Athletics checks, carrying capacity, and STR saves.',
+  dex: 'Dexterity — Ranged attacks, AC in light/medium armor, Initiative, Acrobatics, Stealth, Sleight of Hand, and DEX saves.',
+  con: 'Constitution — Hit point maximum, Concentration saves, and CON saves.',
+  int: 'Intelligence — Arcana, History, Investigation, Nature, Religion checks, and INT saves.',
+  wis: 'Wisdom — Perception, Insight, Medicine, Animal Handling, Survival, and WIS saves. Spellcasting for Cleric, Druid, and Ranger.',
+  cha: 'Charisma — Persuasion, Deception, Intimidation, Performance, and CHA saves. Spellcasting for Bard, Paladin, Sorcerer, and Warlock.',
+};
 
 export default function CharacterEditorPage() {
   return (
@@ -37,6 +59,13 @@ function CharacterEditor() {
   const [showSpeciesTraits, setShowSpeciesTraits] = useState(false);
   const [showClassFeatures, setShowClassFeatures] = useState(false);
   const [newSpellInput, setNewSpellInput] = useState('');
+  const [showLevelUp, setShowLevelUp] = useState(false);
+  const [luHpMode, setLuHpMode] = useState<'average' | 'roll'>('average');
+  const [luHpRolled, setLuHpRolled] = useState<number | null>(null);
+  const [luAsiMode, setLuAsiMode] = useState<'plus2' | 'split'>('plus2');
+  const [luAsiA, setLuAsiA] = useState<Ability | null>(null);
+  const [luAsiB, setLuAsiB] = useState<Ability | null>(null);
+  const [luCantrip, setLuCantrip] = useState<string | null>(null);
 
   const character = useMemo(() => characters.find((c) => c.id === id) ?? null, [characters, id]);
 
@@ -122,6 +151,35 @@ function CharacterEditor() {
     update({ knownSpells: (character!.knownSpells ?? []).filter((s) => s !== name) });
   }
 
+  function removeCantrip(name: string) {
+    update({ knownCantrips: (character!.knownCantrips ?? []).filter((s) => s !== name) });
+  }
+
+  function resetLevelUpState() {
+    setLuHpMode('average');
+    setLuHpRolled(null);
+    setLuAsiMode('plus2');
+    setLuAsiA(null);
+    setLuAsiB(null);
+    setLuCantrip(null);
+  }
+
+  function applyLevelUp() {
+    if (!character) return;
+    const choices: LevelUpChoices = {
+      hpRoll: luHpMode === 'roll' ? luHpRolled : null,
+      asiMode: luAsiMode,
+      asiPlus2: luAsiA,
+      asiPlus1: luAsiMode === 'split' ? luAsiB : null,
+      newCantrip: luCantrip,
+    };
+    const updated = levelUpCharacter(character, choices);
+    setRawCharacters((cs) => cs.map((c) => (c.id === id ? updated : c)));
+    setToast(`Leveled up to ${updated.level}! 🎉`);
+    setShowLevelUp(false);
+    resetLevelUpState();
+  }
+
   const prof = proficiencyBonus(character.level);
   const speciesData = SPECIES_MAP[character.species ?? ''];
   const classData = CLASSES_MAP[Object.keys(CLASSES_MAP).find((k) => CLASSES_MAP[k].name === character.class) ?? ''];
@@ -133,21 +191,51 @@ function CharacterEditor() {
   const deathSaves = character.deathSaves ?? { successes: 0, failures: 0 };
   const currency = character.currency ?? { pp: 0, gp: 0, ep: 0, sp: 0, cp: 0 };
 
+  // Level-up helpers
+  const nextLevel = character.level + 1;
+  const isMaxLevel = character.level >= 20;
+  const newLevelFeatures = classData?.features.filter((f) => f.level === nextLevel) ?? [];
+  const isASILevel = newLevelFeatures.some((f) => f.name === 'Ability Score Improvement');
+  const currentCantripCount = classData ? getCantripCountAtLevel(classData, character.level) : 0;
+  const nextCantripCount = classData ? getCantripCountAtLevel(classData, nextLevel) : 0;
+  const gainsCantripAtLevelUp = nextCantripCount > currentCantripCount;
+  const hitDie = classData?.hitDie ?? 8;
+  const conMod = abilityModifier(character.abilities.con);
+  const luAvgHp = Math.max(1, Math.floor(hitDie / 2) + 1 + conMod);
+
+  function canApplyLevelUp(): boolean {
+    if (luHpMode === 'roll' && luHpRolled === null) return false;
+    if (isASILevel && !luAsiA) return false;
+    if (isASILevel && luAsiMode === 'split' && !luAsiB) return false;
+    if (gainsCantripAtLevelUp && !luCantrip) return false;
+    return true;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <Link href="/characters" className="text-sm underline text-ink/70">← All characters</Link>
-        <button
-          onClick={() => {
-            if (confirm('Delete this character?')) {
-              setRawCharacters((cs) => cs.filter((c) => c.id !== id));
-              router.push('/characters');
-            }
-          }}
-          className="btn text-xs text-blood"
-        >
-          Delete
-        </button>
+        <div className="flex gap-2 items-center">
+          {!isMaxLevel && (
+            <button
+              onClick={() => { resetLevelUpState(); setShowLevelUp(true); }}
+              className="btn-gold text-sm px-3 py-1"
+            >
+              ↑ Level Up
+            </button>
+          )}
+          <button
+            onClick={() => {
+              if (confirm('Delete this character?')) {
+                setRawCharacters((cs) => cs.filter((c) => c.id !== id));
+                router.push('/characters');
+              }
+            }}
+            className="btn text-xs text-blood"
+          >
+            Delete
+          </button>
+        </div>
       </div>
 
       {/* Identity */}
@@ -267,7 +355,9 @@ function CharacterEditor() {
 
           {/* Heroic Inspiration */}
           <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold">Heroic Inspiration</span>
+            <Tip text="Awarded by the DM for great roleplay or clever thinking. Spend it to reroll any die before seeing the result.">
+              <span className="text-sm font-semibold underline decoration-dotted decoration-ink/30">Heroic Inspiration</span>
+            </Tip>
             <button
               onClick={() => update({ heroicInspiration: !character.heroicInspiration })}
               className={`px-3 py-1 rounded text-sm font-semibold border transition-colors ${
@@ -283,7 +373,9 @@ function CharacterEditor() {
           {/* Exhaustion */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <span className="text-sm font-semibold">Exhaustion</span>
+              <Tip text="Each level imposes −1 to all d20 tests and −5 ft. Speed. Level 6 is death. Removed by a Long Rest (one level per rest).">
+                <span className="text-sm font-semibold underline decoration-dotted decoration-ink/30">Exhaustion</span>
+              </Tip>
               <span className={`text-sm font-bold ${exhaustion >= 6 ? 'text-blood' : exhaustion > 0 ? 'text-amber-700' : 'text-ink/40'}`}>
                 {exhaustion === 6 ? 'DEAD' : exhaustion === 0 ? 'None' : `Level ${exhaustion}`}
               </span>
@@ -313,7 +405,9 @@ function CharacterEditor() {
           {/* Death Saves (show when HP = 0) */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <span className="text-sm font-semibold">Death Saves</span>
+              <Tip text="At 0 HP, roll a d20 at the start of each turn. 10+ = Success, 9− = Failure. 3 successes = Stable. 3 failures = Death. Any damage = 1 failure (critical = 2).">
+                <span className="text-sm font-semibold underline decoration-dotted decoration-ink/30">Death Saves</span>
+              </Tip>
               <button
                 onClick={() => update({ deathSaves: { successes: 0, failures: 0 } })}
                 className="text-xs text-ink/40 underline"
@@ -360,7 +454,9 @@ function CharacterEditor() {
               return (
                 <div key={a} className="rounded-md border border-ink/15 bg-white/70 p-2">
                   <div className="flex items-center justify-between">
-                    <span className="label text-xs">{ABILITY_LABELS[a].slice(0, 3).toUpperCase()}</span>
+                    <Tip text={ABILITY_TIPS[a]}>
+                      <span className="label text-xs underline decoration-dotted decoration-ink/30">{ABILITY_LABELS[a].slice(0, 3).toUpperCase()}</span>
+                    </Tip>
                     <span className="heading text-base">{fmt(mod)}</span>
                   </div>
                   <input
@@ -397,7 +493,9 @@ function CharacterEditor() {
               <li key={s.key} className="flex items-center justify-between rounded border border-ink/10 bg-white/60 px-2 py-1 text-sm">
                 <label className="flex items-center gap-2">
                   <input type="checkbox" checked={hasProficiency} onChange={() => toggleSkill(s.key)} />
-                  <span>{s.label}</span>
+                  <Tip text={`${ABILITY_LABELS[s.ability]} — ${s.description}`}>
+                    <span className="underline decoration-dotted decoration-ink/30">{s.label}</span>
+                  </Tip>
                   <span className="text-xs text-ink/50 uppercase">{s.ability}</span>
                 </label>
                 <button className="btn text-xs" onClick={() => logRoll(`1d20${bonus >= 0 ? '+' : ''}${bonus}`, s.label)}>
@@ -559,10 +657,47 @@ function CharacterEditor() {
         </section>
       )}
 
+      {/* Cantrips */}
+      {casterType !== 'none' && (
+        <section className="card">
+          <h2 className="heading text-lg">
+            <Tip text="Cantrips are free-action spells you can cast unlimited times. They don't use spell slots.">
+              <span className="underline decoration-dotted decoration-ink/30">Cantrips</span>
+            </Tip>
+          </h2>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {(character.knownCantrips ?? []).length === 0 ? (
+              <p className="text-sm text-ink/50">No cantrips recorded.</p>
+            ) : (
+              (character.knownCantrips ?? []).map((ct) => {
+                const info = CANTRIP_DATA[ct];
+                return (
+                  <span key={ct} className="relative group/ctip inline-flex items-center gap-1 rounded-full bg-blood/10 border border-blood/20 px-2.5 py-0.5 text-xs text-blood font-medium">
+                    {ct}
+                    {info && (
+                      <span className="pointer-events-none absolute bottom-full left-0 mb-1.5 z-30 hidden group-hover/ctip:block w-60 rounded-md bg-ink text-parchment text-xs px-2.5 py-2 shadow-lg leading-snug">
+                        <span className="block font-semibold mb-0.5">{info.name} <span className="font-normal text-parchment/60">({info.school})</span></span>
+                        {info.description}
+                        <span className="absolute top-full left-4 -mt-px border-4 border-transparent border-t-ink" />
+                      </span>
+                    )}
+                    <button onClick={() => removeCantrip(ct)} className="text-blood/50 hover:text-blood ml-0.5">✕</button>
+                  </span>
+                );
+              })
+            )}
+          </div>
+          <div className="mt-2 text-xs text-ink/40">
+            {currentCantripCount > 0 && `${character.class} knows ${currentCantripCount} cantrips at level ${character.level}.`}
+            {' '}Add via Level Up or edit manually below.
+          </div>
+        </section>
+      )}
+
       {/* Known Spells */}
       {casterType !== 'none' && (
         <section className="card">
-          <h2 className="heading text-lg">Known Spells</h2>
+          <h2 className="heading text-lg">Leveled Spells</h2>
           <div className="mt-2 flex gap-2">
             <input
               className="input flex-1"
@@ -625,6 +760,148 @@ function CharacterEditor() {
           />
         </div>
       </section>
+
+      {/* Level Up Modal */}
+      {showLevelUp && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowLevelUp(false)}>
+          <div className="bg-parchment rounded-xl w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6 space-y-5">
+              <div className="flex items-center justify-between">
+                <h2 className="heading text-2xl text-blood">Level Up to {nextLevel}</h2>
+                <button onClick={() => setShowLevelUp(false)} className="text-ink/40 text-xl leading-none px-1">✕</button>
+              </div>
+
+              {/* New features */}
+              {newLevelFeatures.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink/50 mb-2">New Features</p>
+                  <div className="space-y-2">
+                    {newLevelFeatures.map((f) => (
+                      <div key={f.name} className="rounded border border-ink/15 bg-white/60 px-3 py-2">
+                        <p className="text-sm font-semibold">{f.name}</p>
+                        <p className="text-xs text-ink/70 mt-0.5 leading-snug">{f.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* HP increase */}
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink/50 mb-2">Hit Points</p>
+                <div className="flex gap-2 mb-2">
+                  <button
+                    onClick={() => setLuHpMode('average')}
+                    className={`flex-1 rounded border px-3 py-2 text-sm transition-colors ${luHpMode === 'average' ? 'border-blood bg-blood/10 text-blood font-semibold' : 'border-ink/20 bg-white/60'}`}
+                  >
+                    Take Average +{luAvgHp}
+                    <span className="block text-xs font-normal text-ink/50">d{hitDie}/2+1 + CON {fmt(conMod)}</span>
+                  </button>
+                  <button
+                    onClick={() => setLuHpMode('roll')}
+                    className={`flex-1 rounded border px-3 py-2 text-sm transition-colors ${luHpMode === 'roll' ? 'border-blood bg-blood/10 text-blood font-semibold' : 'border-ink/20 bg-white/60'}`}
+                  >
+                    Roll d{hitDie}
+                    {luHpRolled !== null && <span className="block text-xs font-normal text-ink/50">Rolled {luHpRolled} + CON = +{Math.max(1, luHpRolled + conMod)} HP</span>}
+                  </button>
+                </div>
+                {luHpMode === 'roll' && (
+                  <button
+                    onClick={() => {
+                      const r = roll(`1d${hitDie}`);
+                      setLuHpRolled(r ? r.total : 1);
+                    }}
+                    className="btn-gold w-full"
+                  >
+                    🎲 Roll 1d{hitDie} {luHpRolled !== null ? `(rolled ${luHpRolled})` : ''}
+                  </button>
+                )}
+              </div>
+
+              {/* ASI */}
+              {isASILevel && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink/50 mb-2">Ability Score Improvement</p>
+                  <div className="flex gap-2 mb-3">
+                    <button onClick={() => { setLuAsiMode('plus2'); setLuAsiB(null); }} className={`flex-1 rounded border px-2 py-1.5 text-sm ${luAsiMode === 'plus2' ? 'border-blood bg-blood/10 font-semibold text-blood' : 'border-ink/20 bg-white/60'}`}>
+                      +2 one ability
+                    </button>
+                    <button onClick={() => setLuAsiMode('split')} className={`flex-1 rounded border px-2 py-1.5 text-sm ${luAsiMode === 'split' ? 'border-blood bg-blood/10 font-semibold text-blood' : 'border-ink/20 bg-white/60'}`}>
+                      +1 to two abilities
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="label">{luAsiMode === 'plus2' ? '+2 to' : '+1 to (first)'}</label>
+                      <select className="input mt-1" value={luAsiA ?? ''} onChange={(e) => setLuAsiA(e.target.value as Ability || null)}>
+                        <option value="">— choose —</option>
+                        {ABILITIES.map((ab) => (
+                          <option key={ab} value={ab} disabled={character.abilities[ab] >= 20}>
+                            {ABILITY_LABELS[ab]} ({character.abilities[ab]}{character.abilities[ab] < 20 ? ` → ${character.abilities[ab] + (luAsiMode === 'plus2' ? 2 : 1)}` : ' max'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {luAsiMode === 'split' && (
+                      <div>
+                        <label className="label">+1 to (second)</label>
+                        <select className="input mt-1" value={luAsiB ?? ''} onChange={(e) => setLuAsiB(e.target.value as Ability || null)}>
+                          <option value="">— choose —</option>
+                          {ABILITIES.map((ab) => (
+                            <option key={ab} value={ab} disabled={character.abilities[ab] >= 20 || ab === luAsiA}>
+                              {ABILITY_LABELS[ab]} ({character.abilities[ab]}{character.abilities[ab] < 20 && ab !== luAsiA ? ' → ' + (character.abilities[ab] + 1) : ab === luAsiA ? ' (same)' : ' max'})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* New cantrip */}
+              {gainsCantripAtLevelUp && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink/50 mb-2">New Cantrip</p>
+                  <p className="text-xs text-ink/60 mb-2">Your {character.class} learns an additional cantrip at level {nextLevel}.</p>
+                  <div className="grid gap-1.5 sm:grid-cols-2 max-h-48 overflow-y-auto">
+                    {(classData?.cantripPool ?? [])
+                      .filter((ct) => !(character.knownCantrips ?? []).includes(ct))
+                      .map((ct) => {
+                        const info = CANTRIP_DATA[ct];
+                        return (
+                          <label key={ct} className={`flex items-start gap-2 rounded px-2 py-1.5 border cursor-pointer transition-colors ${luCantrip === ct ? 'border-blood/40 bg-blood/5' : 'border-ink/10 bg-white/60 hover:bg-white'}`}>
+                            <input type="radio" name="luCantrip" className="mt-0.5 flex-shrink-0" checked={luCantrip === ct} onChange={() => setLuCantrip(ct)} />
+                            <span>
+                              <span className="text-sm font-medium block">{ct}</span>
+                              {info && <span className="text-xs text-ink/55 leading-snug">{info.description.slice(0, 60)}…</span>}
+                            </span>
+                          </label>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
+              {/* Spell slots preview */}
+              {casterType !== 'none' && casterType !== 'pact' && newLevelFeatures.length === 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink/50 mb-1">Spell Slots at Level {nextLevel}</p>
+                  <p className="text-xs text-ink/60">Slots will be updated automatically when you apply the level up.</p>
+                </div>
+              )}
+
+              <button
+                onClick={applyLevelUp}
+                disabled={!canApplyLevelUp()}
+                className="btn-gold w-full text-base py-2 disabled:opacity-40"
+              >
+                ✦ Apply Level Up to {nextLevel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className="fixed bottom-6 right-6 rounded-md bg-ink text-parchment px-4 py-2 shadow-lg text-sm z-50">

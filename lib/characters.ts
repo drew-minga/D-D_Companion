@@ -3,7 +3,7 @@ import { uid } from './dice';
 import { CLASSES_MAP } from './data/classes';
 import { SPECIES_MAP } from './data/species';
 import { BACKGROUNDS_MAP } from './data/backgrounds';
-import { getSlotsForClass } from './data/spellSlots';
+import { getSlotsForClass, PACT_SLOTS } from './data/spellSlots';
 
 export const CURRENT_SCHEMA_VERSION = 2;
 
@@ -46,6 +46,7 @@ export function newCharacter(): Character {
     deathSaves: defaultDeathSaves(),
     currency: defaultCurrency(),
     spellSlots: defaultSpellSlots(),
+    knownCantrips: [],
     knownSpells: [],
     feats: [],
     toolProficiencies: [],
@@ -69,6 +70,7 @@ export function migrateCharacter(c: unknown): Character {
     deathSaves: (raw.deathSaves as DeathSaves | undefined) ?? defaultDeathSaves(),
     currency: (raw.currency as Currency | undefined) ?? defaultCurrency(),
     spellSlots: (raw.spellSlots as SpellSlotState | undefined) ?? defaultSpellSlots(),
+    knownCantrips: Array.isArray(raw.knownCantrips) ? (raw.knownCantrips as string[]) : [],
     knownSpells: Array.isArray(raw.knownSpells) ? (raw.knownSpells as string[]) : [],
     feats: Array.isArray(raw.feats) ? raw.feats : [],
     toolProficiencies: Array.isArray(raw.toolProficiencies) ? (raw.toolProficiencies as string[]) : [],
@@ -89,6 +91,7 @@ export interface WizardOutput {
   asiPlus2: Ability | null;
   asiPlus1: Ability | null;
   chosenClassSkills: string[];
+  chosenCantrips: string[];
 }
 
 export function createCharacterFromWizard(input: WizardOutput): Character {
@@ -151,6 +154,7 @@ export function createCharacterFromWizard(input: WizardOutput): Character {
     deathSaves: defaultDeathSaves(),
     currency: defaultCurrency(),
     spellSlots: { total: totalSlots, used: new Array(9).fill(0) },
+    knownCantrips: input.chosenCantrips ?? [],
     knownSpells: [],
     feats: backgroundDef
       ? [{ featId: backgroundDef.originFeatId, source: 'origin', level: 1 }]
@@ -163,5 +167,81 @@ export function createCharacterFromWizard(input: WizardOutput): Character {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     createdAt: now,
     updatedAt: now,
+  };
+}
+
+export interface LevelUpChoices {
+  /** HP rolled on hit die (null = take average) */
+  hpRoll: number | null;
+  /** If ASI level: +2 to this ability (null if taking split option) */
+  asiPlus2: Ability | null;
+  /** If ASI level: +1 to this ability (used for both split and combined) */
+  asiPlus1: Ability | null;
+  /** 'plus2' = +2 one ability; 'split' = +1 to two abilities */
+  asiMode: 'plus2' | 'split';
+  /** New cantrip gained at this level (null if no gain) */
+  newCantrip: string | null;
+}
+
+export function levelUpCharacter(c: Character, choices: LevelUpChoices): Character {
+  const newLevel = c.level + 1;
+  const classDef = Object.values(CLASSES_MAP).find((cl) => cl.name === c.class) ?? CLASSES_MAP[c.class];
+  const hitDie = classDef?.hitDie ?? 8;
+  const conMod = Math.floor((c.abilities.con - 10) / 2);
+
+  // HP increase
+  const hpGain = Math.max(1,
+    choices.hpRoll !== null
+      ? choices.hpRoll + conMod
+      : Math.floor(hitDie / 2) + 1 + conMod,
+  );
+
+  // ASI
+  const newAbilities = { ...c.abilities };
+  const isASILevel = classDef?.features.some(
+    (f) => f.level === newLevel && f.name === 'Ability Score Improvement',
+  ) ?? false;
+  if (isASILevel) {
+    if (choices.asiMode === 'plus2' && choices.asiPlus2) {
+      newAbilities[choices.asiPlus2] = Math.min(20, newAbilities[choices.asiPlus2] + 2);
+    } else if (choices.asiMode === 'split' && choices.asiPlus2 && choices.asiPlus1) {
+      newAbilities[choices.asiPlus2] = Math.min(20, newAbilities[choices.asiPlus2] + 1);
+      newAbilities[choices.asiPlus1] = Math.min(20, newAbilities[choices.asiPlus1] + 1);
+    }
+  }
+
+  // Spell slots
+  const casterType = classDef?.spellcastingType ?? 'none';
+  const currentSlots = c.spellSlots ?? defaultSpellSlots();
+  let newSpellSlots = currentSlots;
+  if (casterType !== 'none' && casterType !== 'pact') {
+    const newTotal = classDef ? getSlotsForClass(classDef.name, newLevel) : currentSlots.total;
+    const newUsed = currentSlots.used.map((u, i) => Math.min(u, newTotal[i]));
+    newSpellSlots = { total: newTotal, used: newUsed };
+  }
+
+  // Pact slots
+  let newPactSlots = c.pactSlots;
+  if (casterType === 'pact') {
+    const pactRow = PACT_SLOTS[Math.max(0, Math.min(19, newLevel - 1))];
+    const currentUsed = c.pactSlots?.used ?? 0;
+    newPactSlots = { total: pactRow.slots, used: Math.min(currentUsed, pactRow.slots), slotLevel: pactRow.level };
+  }
+
+  // Cantrips
+  const newCantrips =
+    choices.newCantrip && !c.knownCantrips?.includes(choices.newCantrip)
+      ? [...(c.knownCantrips ?? []), choices.newCantrip]
+      : c.knownCantrips ?? [];
+
+  return {
+    ...c,
+    level: newLevel,
+    hp: { ...c.hp, max: c.hp.max + hpGain, current: c.hp.current + hpGain },
+    abilities: newAbilities,
+    spellSlots: newSpellSlots,
+    pactSlots: newPactSlots,
+    knownCantrips: newCantrips,
+    updatedAt: Date.now(),
   };
 }

@@ -21,6 +21,12 @@ export interface ClassDef {
   spellcastingAbility: Ability | null;
   spellcastingType: CasterType;
   features: ClassFeature[];
+  /** Number of cantrips chosen at character creation (0 for non-casters) */
+  cantripCount: number;
+  /** Pool of cantrip names available to this class */
+  cantripPool: string[];
+  /** Maps level → total cantrips known at that level (only levels where count increases) */
+  cantripsByLevel: Record<number, number>;
 }
 
 export const CLASSES: ClassDef[] = [
@@ -36,6 +42,9 @@ export const CLASSES: ClassDef[] = [
     skillChoicePool: ['animal-handling', 'athletics', 'intimidation', 'nature', 'perception', 'survival'],
     spellcastingAbility: null,
     spellcastingType: 'none',
+    cantripCount: 0,
+    cantripPool: [],
+    cantripsByLevel: {},
     features: [
       { level: 1, name: 'Rage', description: 'You can enter a rage as a Bonus Action. While raging you gain Advantage on Strength checks and saves, a bonus to damage rolls, and Resistance to Bludgeoning, Piercing, and Slashing damage. Your rage lasts for 1 minute. You have 2 uses at level 1, increasing as you level up.' },
       { level: 1, name: 'Unarmored Defense', description: 'While not wearing armor, your AC equals 10 + Dexterity modifier + Constitution modifier. You can use a Shield and still gain this benefit.' },
@@ -68,6 +77,9 @@ export const CLASSES: ClassDef[] = [
     skillChoicePool: ['acrobatics', 'animal-handling', 'arcana', 'athletics', 'deception', 'history', 'insight', 'intimidation', 'investigation', 'medicine', 'nature', 'perception', 'performance', 'persuasion', 'religion', 'sleight-of-hand', 'stealth', 'survival'],
     spellcastingAbility: 'cha',
     spellcastingType: 'full',
+    cantripCount: 2,
+    cantripPool: ['Blade Ward', 'Dancing Lights', 'Friends', 'Light', 'Mage Hand', 'Mending', 'Minor Illusion', 'Prestidigitation', 'Thunderclap', 'True Strike', 'Vicious Mockery'],
+    cantripsByLevel: { 1: 2, 4: 3, 10: 4 },
     features: [
       { level: 1, name: 'Bardic Inspiration', description: 'As a Bonus Action, you can grant a creature (other than yourself) within 60 feet a Bardic Inspiration die (d6). The creature can add the die to one ability check, attack roll, or saving throw within the next 10 minutes. You can use this a number of times equal to your Charisma modifier per Long Rest.' },
       { level: 1, name: 'Spellcasting', description: 'You can cast Bard spells using Charisma as your spellcasting ability. You know 2 cantrips and 4 spells at level 1.' },
@@ -93,6 +105,9 @@ export const CLASSES: ClassDef[] = [
     skillChoicePool: ['history', 'insight', 'medicine', 'persuasion', 'religion'],
     spellcastingAbility: 'wis',
     spellcastingType: 'full',
+    cantripCount: 3,
+    cantripPool: ['Guidance', 'Light', 'Mending', 'Resistance', 'Sacred Flame', 'Spare the Dying', 'Thaumaturgy', 'Toll the Dead', 'Word of Radiance'],
+    cantripsByLevel: { 1: 3, 4: 4, 10: 5 },
     features: [
       { level: 1, name: 'Divine Order', description: 'Choose Protector (proficiency with Martial weapons and Heavy armor) or Thaumaturge (you know one extra Cleric cantrip and gain Expertise in Arcana or Religion).' },
       { level: 1, name: 'Spellcasting', description: 'You can cast Cleric spells using Wisdom. You prepare a number of spells equal to your Wisdom modifier + Cleric level.' },
@@ -117,6 +132,9 @@ export const CLASSES: ClassDef[] = [
     skillChoicePool: ['animal-handling', 'arcana', 'insight', 'medicine', 'nature', 'perception', 'religion', 'survival'],
     spellcastingAbility: 'wis',
     spellcastingType: 'full',
+    cantripCount: 2,
+    cantripPool: ['Druidcraft', 'Elementalism', 'Guidance', 'Mending', 'Poison Spray', 'Produce Flame', 'Resistance', 'Shillelagh', 'Thorn Whip', 'Thunderclap'],
+    cantripsByLevel: { 1: 2, 4: 3, 10: 4 },
     features: [
       { level: 1, name: 'Druidic', description: 'You know Druidic, the secret language of druids. You can speak it and use it to leave hidden messages understood only by other druids.' },
       { level: 1, name: 'Primal Order', description: 'Choose Magician (you know one extra Druid cantrip and gain Expertise in Arcana or Nature) or Warden (proficiency with Martial weapons and training in the Nature skill).' },
@@ -142,6 +160,9 @@ export const CLASSES: ClassDef[] = [
     skillChoicePool: ['acrobatics', 'animal-handling', 'athletics', 'history', 'insight', 'intimidation', 'perception', 'survival'],
     spellcastingAbility: null,
     spellcastingType: 'none',
+    cantripCount: 0,
+    cantripPool: [],
+    cantripsByLevel: {},
     features: [
       { level: 1, name: 'Fighting Style', description: 'You adopt a Fighting Style specialty: Archery, Defense, Dueling, Great Weapon Fighting, Protection, or Two-Weapon Fighting.' },
       { level: 1, name: 'Second Wind', description: 'You have a limited well of stamina. As a Bonus Action, you can regain Hit Points equal to 1d10 + your Fighter level. You can use this once per Short or Long Rest.' },
@@ -168,6 +189,9 @@ export const CLASSES: ClassDef[] = [
     skillChoicePool: ['acrobatics', 'athletics', 'history', 'insight', 'religion', 'stealth'],
     spellcastingAbility: null,
     spellcastingType: 'none',
+    cantripCount: 0,
+    cantripPool: [],
+    cantripsByLevel: {},
     features: [
       { level: 1, name: 'Martial Arts', description: 'Your practice of martial arts gives you mastery over combat styles using Unarmed Strikes and monk weapons. You can use DEX instead of STR for attacks, and your Unarmed Strike deals 1d6 (scales with level).' },
       { level: 1, name: 'Unarmored Defense', description: 'While you aren\'t wearing armor or wielding a Shield, your AC equals 10 + Dexterity modifier + Wisdom modifier.' },
@@ -194,6 +218,9 @@ export const CLASSES: ClassDef[] = [
     skillChoicePool: ['athletics', 'insight', 'intimidation', 'medicine', 'persuasion', 'religion'],
     spellcastingAbility: 'cha',
     spellcastingType: 'half',
+    cantripCount: 0,
+    cantripPool: [],
+    cantripsByLevel: {},
     features: [
       { level: 1, name: 'Divine Sense', description: 'As a Bonus Action, you can open your awareness to detect Celestials, Fiends, and Undead within 60 feet. You can use this a number of times equal to 1 + Charisma modifier per Long Rest.' },
       { level: 1, name: 'Lay on Hands', description: 'You have a pool of healing power equal to 5 × Paladin level. As a Bonus Action, you can heal a creature by touching it, spending HP from the pool. You can also expend 5 HP to cure one disease or neutralize one poison.' },
@@ -221,6 +248,9 @@ export const CLASSES: ClassDef[] = [
     skillChoicePool: ['animal-handling', 'athletics', 'insight', 'investigation', 'nature', 'perception', 'stealth', 'survival'],
     spellcastingAbility: 'wis',
     spellcastingType: 'half',
+    cantripCount: 2,
+    cantripPool: ['Druidcraft', 'Elementalism', 'Guidance', 'Mending', 'Message', 'Poison Spray', 'Prestidigitation', 'Thorn Whip', 'Thunderclap', 'True Strike'],
+    cantripsByLevel: { 1: 2, 5: 3, 11: 4, 17: 5 },
     features: [
       { level: 1, name: 'Expertise', description: 'You gain Expertise in one skill: Animal Handling, Athletics, Perception, Stealth, or Survival.' },
       { level: 1, name: 'Favored Enemy', description: 'You are always under the effects of the Hunter\'s Mark spell. It doesn\'t count against your prepared spells, and it requires no Concentration.' },
@@ -247,6 +277,9 @@ export const CLASSES: ClassDef[] = [
     skillChoicePool: ['acrobatics', 'athletics', 'deception', 'insight', 'intimidation', 'investigation', 'perception', 'persuasion', 'sleight-of-hand', 'stealth'],
     spellcastingAbility: null,
     spellcastingType: 'none',
+    cantripCount: 0,
+    cantripPool: [],
+    cantripsByLevel: {},
     features: [
       { level: 1, name: 'Expertise', description: 'Choose two of your skill proficiencies to have doubled proficiency bonus. You gain two more Expertise skills at level 6.' },
       { level: 1, name: 'Sneak Attack', description: 'Once per turn, when you hit with a Finesse or Ranged weapon while you have Advantage or an ally is adjacent to the target, you deal extra damage: 1d6 at level 1, increasing by 1d6 every two levels (10d6 at level 19).' },
@@ -273,6 +306,9 @@ export const CLASSES: ClassDef[] = [
     skillChoicePool: ['arcana', 'deception', 'insight', 'intimidation', 'persuasion', 'religion'],
     spellcastingAbility: 'cha',
     spellcastingType: 'full',
+    cantripCount: 4,
+    cantripPool: ['Acid Splash', 'Blade Ward', 'Chill Touch', 'Dancing Lights', 'Fire Bolt', 'Friends', 'Light', 'Mage Hand', 'Mending', 'Minor Illusion', 'Poison Spray', 'Prestidigitation', 'Ray of Frost', 'Shocking Grasp', 'Thunderclap', 'True Strike'],
+    cantripsByLevel: { 1: 4, 4: 5, 10: 6 },
     features: [
       { level: 1, name: 'Innate Sorcery', description: 'An event in your past or your natural gifts let you tap into your magical power. On your turn you can activate Innate Sorcery as a Bonus Action to add 1d20 to one spell save DC for 1 minute. You can use this twice per Long Rest.' },
       { level: 1, name: 'Spellcasting', description: 'You cast Sorcerer spells using Charisma. You know 2 cantrips and 2 spells at level 1.' },
@@ -297,6 +333,9 @@ export const CLASSES: ClassDef[] = [
     skillChoicePool: ['arcana', 'deception', 'history', 'intimidation', 'investigation', 'nature', 'religion'],
     spellcastingAbility: 'cha',
     spellcastingType: 'pact',
+    cantripCount: 2,
+    cantripPool: ['Blade Ward', 'Chill Touch', 'Eldritch Blast', 'Friends', 'Mage Hand', 'Minor Illusion', 'Poison Spray', 'Prestidigitation', 'Thunderclap', 'True Strike'],
+    cantripsByLevel: { 1: 2, 4: 3, 8: 4, 12: 5 },
     features: [
       { level: 1, name: 'Eldritch Invocations', description: 'In your study of occult lore, you have unearthed Eldritch Invocations. You gain two Invocations of your choice. You can swap one each Long Rest.' },
       { level: 1, name: 'Pact Magic', description: 'You cast Warlock spells using Charisma and regain all Pact Magic slots on a Short or Long Rest. You gain 2 slots at level 2. Slot level increases as you level up.' },
@@ -319,6 +358,9 @@ export const CLASSES: ClassDef[] = [
     skillChoicePool: ['arcana', 'history', 'insight', 'investigation', 'medicine', 'religion'],
     spellcastingAbility: 'int',
     spellcastingType: 'full',
+    cantripCount: 3,
+    cantripPool: ['Acid Splash', 'Blade Ward', 'Chill Touch', 'Dancing Lights', 'Fire Bolt', 'Friends', 'Light', 'Mage Hand', 'Mending', 'Minor Illusion', 'Prestidigitation', 'Ray of Frost', 'Shocking Grasp', 'Thunderclap', 'True Strike'],
+    cantripsByLevel: { 1: 3, 4: 4, 10: 5 },
     features: [
       { level: 1, name: 'Arcane Recovery', description: 'Once per Long Rest when you finish a Short Rest, you can recover expended spell slots whose combined level is no more than half your Wizard level (rounded up, and none of 6th level or higher).' },
       { level: 1, name: 'Spellcasting', description: 'You cast Wizard spells using Intelligence. You have a spellbook containing 6 spells at level 1. You prepare a number of spells equal to your Intelligence modifier + half your Wizard level.' },
@@ -341,4 +383,12 @@ export function getFeaturesUpToLevel(classId: string, level: number): ClassFeatu
   const cls = CLASSES_MAP[classId];
   if (!cls) return [];
   return cls.features.filter((f) => f.level <= level);
+}
+
+export function getCantripCountAtLevel(cls: ClassDef, level: number): number {
+  let count = 0;
+  for (const [lvl, cnt] of Object.entries(cls.cantripsByLevel)) {
+    if (parseInt(lvl) <= level) count = cnt;
+  }
+  return count;
 }

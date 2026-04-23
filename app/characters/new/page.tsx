@@ -11,6 +11,7 @@ import { SPECIES } from '@/lib/data/species';
 import { CLASSES } from '@/lib/data/classes';
 import { BACKGROUNDS } from '@/lib/data/backgrounds';
 import { FEATS_MAP } from '@/lib/data/feats';
+import { CANTRIP_DATA } from '@/lib/data/cantrips';
 
 const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
 
@@ -62,6 +63,7 @@ export default function NewCharacterPage() {
   const [lineageId, setLineageId] = useState('');
   const [classId, setClassId] = useState('');
   const [chosenClassSkills, setChosenClassSkills] = useState<string[]>([]);
+  const [chosenCantrips, setChosenCantrips] = useState<string[]>([]);
   const [backgroundId, setBackgroundId] = useState('');
   const [asiMode, setAsiMode] = useState<'twoOne' | 'threeOne'>('twoOne');
   const [asiPlus2, setAsiPlus2] = useState<Ability | null>(null);
@@ -90,7 +92,12 @@ export default function NewCharacterPage() {
       if (selectedSpecies?.lineages && selectedSpecies.lineages.length > 0) return lineageId !== '';
       return true;
     }
-    if (step === 2) return classId !== '' && chosenClassSkills.length === (selectedClass?.skillChoiceCount ?? 0);
+    if (step === 2) {
+      if (!classId) return false;
+      if (chosenClassSkills.length !== (selectedClass?.skillChoiceCount ?? 0)) return false;
+      if ((selectedClass?.cantripCount ?? 0) > 0 && chosenCantrips.length !== selectedClass!.cantripCount) return false;
+      return true;
+    }
     if (step === 3) {
       if (!backgroundId) return false;
       if (asiMode === 'twoOne') return asiPlus2 !== null && asiPlus1 !== null;
@@ -211,6 +218,7 @@ export default function NewCharacterPage() {
       asiPlus2,
       asiPlus1,
       chosenClassSkills,
+      chosenCantrips,
     };
     const newChar = createCharacterFromWizard(output);
     // Write synchronously to avoid race condition where router.push navigates
@@ -352,7 +360,7 @@ export default function NewCharacterPage() {
             {CLASSES.map((cls) => (
               <button
                 key={cls.id}
-                onClick={() => { setClassId(cls.id); setChosenClassSkills([]); }}
+                onClick={() => { setClassId(cls.id); setChosenClassSkills([]); setChosenCantrips([]); }}
                 className={`card text-left transition-all ${
                   classId === cls.id ? 'ring-2 ring-gold bg-gold/10' : 'hover:bg-white/80'
                 }`}
@@ -410,14 +418,55 @@ export default function NewCharacterPage() {
                 </div>
               </div>
 
+              {selectedClass.cantripCount > 0 && (
+                <div>
+                  <p className="text-sm font-semibold mb-1">
+                    Choose {selectedClass.cantripCount} cantrips:
+                    <span className="font-normal text-ink/60"> ({chosenCantrips.length}/{selectedClass.cantripCount} selected)</span>
+                  </p>
+                  <div className="grid gap-1.5 sm:grid-cols-2">
+                    {selectedClass.cantripPool.map((name) => {
+                      const info = CANTRIP_DATA[name];
+                      const selected = chosenCantrips.includes(name);
+                      const disabled = !selected && chosenCantrips.length >= selectedClass.cantripCount;
+                      return (
+                        <label
+                          key={name}
+                          className={`flex items-start gap-2 rounded px-2 py-1.5 border transition-colors cursor-pointer ${
+                            selected ? 'border-blood/40 bg-blood/5' : 'border-ink/10 bg-white/60'
+                          } ${disabled ? 'opacity-40' : 'hover:bg-white'}`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 flex-shrink-0"
+                            checked={selected}
+                            disabled={disabled}
+                            onChange={() => {
+                              if (selected) setChosenCantrips((prev) => prev.filter((c) => c !== name));
+                              else if (!disabled) setChosenCantrips((prev) => [...prev, name]);
+                            }}
+                          />
+                          <span className="flex-1 min-w-0">
+                            <span className="text-sm font-medium block">{name}</span>
+                            {info && <span className="text-xs text-ink/55 block leading-snug">{info.school} — {info.description}</span>}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <p className="text-sm font-semibold mb-1">Level 1–3 Features:</p>
                 <ul className="space-y-1">
                   {selectedClass.features.filter((f) => f.level <= 3).map((f) => (
                     <li key={f.name} className="text-sm">
-                      <span className="font-semibold">{f.name}</span>
+                      <Tooltip text={f.description}>
+                        <span className="font-semibold underline decoration-dotted decoration-ink/30 cursor-help">{f.name}</span>
+                      </Tooltip>
                       <span className="text-ink/60"> (Lv {f.level}) — </span>
-                      <span className="text-ink/80">{f.description.slice(0, 100)}{f.description.length > 100 ? '…' : ''}</span>
+                      <span className="text-ink/80">{f.description.slice(0, 80)}{f.description.length > 80 ? '…' : ''}</span>
                     </li>
                   ))}
                 </ul>
