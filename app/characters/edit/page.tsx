@@ -9,7 +9,8 @@ import type { Ability, Character, RollResult } from '@/lib/types';
 import { ABILITIES, ABILITY_LABELS, SKILLS } from '@/lib/types';
 import { migrateCharacter, levelUpCharacter, type LevelUpChoices } from '@/lib/characters';
 import { SPECIES_MAP } from '@/lib/data/species';
-import { CLASSES_MAP, getFeaturesUpToLevel, getCantripCountAtLevel } from '@/lib/data/classes';
+import { CLASSES_MAP, getFeaturesUpToLevel, getCantripCountAtLevel, getMaxSpells } from '@/lib/data/classes';
+import { ITEM_CATEGORIES, STARTING_EQUIPMENT } from '@/lib/data/items';
 import { FEATS_MAP } from '@/lib/data/feats';
 import { getCasterType, getSlotsForClass, PACT_SLOTS } from '@/lib/data/spellSlots';
 import { CANTRIP_DATA } from '@/lib/data/cantrips';
@@ -190,6 +191,10 @@ function CharacterEditor() {
   const exhaustion = character.exhaustion ?? 0;
   const deathSaves = character.deathSaves ?? { successes: 0, failures: 0 };
   const currency = character.currency ?? { pp: 0, gp: 0, ep: 0, sp: 0, cp: 0 };
+  const spellcastingMod = classData?.spellcastingAbility
+    ? abilityModifier(character.abilities[classData.spellcastingAbility])
+    : 0;
+  const maxSpells = classData ? getMaxSpells(classData, character.level, spellcastingMod) : null;
 
   // Level-up helpers
   const nextLevel = character.level + 1;
@@ -697,7 +702,26 @@ function CharacterEditor() {
       {/* Known Spells */}
       {casterType !== 'none' && (
         <section className="card">
-          <h2 className="heading text-lg">Leveled Spells</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="heading text-lg">Leveled Spells</h2>
+            {maxSpells !== null && (
+              <span className={`text-sm font-medium ${(character.knownSpells ?? []).length >= maxSpells ? 'text-blood' : 'text-ink/60'}`}>
+                {(character.knownSpells ?? []).length} / {maxSpells}{' '}
+                <span className="text-xs font-normal text-ink/40">
+                  {classData?.spellsPreparedType ? 'prepared' : 'known'}
+                </span>
+              </span>
+            )}
+          </div>
+          {maxSpells !== null && (
+            <p className="mt-1 text-xs text-ink/45">
+              {classData?.spellsPreparedType === 'mod+level'
+                ? `Prepared: ${classData.spellcastingAbility?.toUpperCase()} mod (${fmt(spellcastingMod)}) + level (${character.level}) = ${maxSpells}`
+                : classData?.spellsPreparedType === 'mod+half-level'
+                ? `Prepared: ${classData.spellcastingAbility?.toUpperCase()} mod (${fmt(spellcastingMod)}) + ½ level (${Math.floor(character.level / 2)}) = ${maxSpells}`
+                : `Known spells at level ${character.level}: ${maxSpells}`}
+            </p>
+          )}
           <div className="mt-2 flex gap-2">
             <input
               className="input flex-1"
@@ -705,9 +729,19 @@ function CharacterEditor() {
               onChange={(e) => setNewSpellInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && addSpell()}
               placeholder="Fireball, Cure Wounds…"
+              disabled={maxSpells !== null && (character.knownSpells ?? []).length >= maxSpells}
             />
-            <button onClick={addSpell} className="btn-primary">Add</button>
+            <button
+              onClick={addSpell}
+              className="btn-primary"
+              disabled={maxSpells !== null && (character.knownSpells ?? []).length >= maxSpells}
+            >
+              Add
+            </button>
           </div>
+          {maxSpells !== null && (character.knownSpells ?? []).length >= maxSpells && (
+            <p className="mt-1 text-xs text-blood">Spell limit reached. Remove a spell to add another.</p>
+          )}
           {(character.knownSpells ?? []).length === 0 ? (
             <p className="mt-3 text-sm text-ink/50">No spells recorded yet.</p>
           ) : (
@@ -913,35 +947,195 @@ function CharacterEditor() {
 }
 
 function InventoryEditor({ character, update }: { character: Character; update: (p: Partial<Character>) => void }) {
-  const [name, setName] = useState('');
-  const [qty, setQty] = useState(1);
+  const [tab, setTab] = useState<'starting' | 'browse' | 'custom'>('custom');
+  const [customName, setCustomName] = useState('');
+  const [customQty, setCustomQty] = useState(1);
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [openCategory, setOpenCategory] = useState<string | null>(null);
 
-  function add() {
-    if (!name.trim()) return;
-    update({ inventory: [...character.inventory, { name: name.trim(), qty }] });
-    setName('');
-    setQty(1);
+  const startingList = STARTING_EQUIPMENT[character.class] ?? [];
+
+  function addCustom() {
+    if (!customName.trim()) return;
+    update({ inventory: [...character.inventory, { name: customName.trim(), qty: customQty }] });
+    setCustomName('');
+    setCustomQty(1);
   }
 
-  function remove(i: number) {
+  function removeItem(i: number) {
     update({ inventory: character.inventory.filter((_, idx) => idx !== i) });
   }
 
+  function toggleSelected(name: string) {
+    setSelectedItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
+  function addSelected() {
+    if (selectedItems.size === 0) return;
+    const toAdd = [...selectedItems].map((name) => ({ name, qty: 1 }));
+    update({ inventory: [...character.inventory, ...toAdd] });
+    setSelectedItems(new Set());
+  }
+
+  const TABS = [
+    { key: 'starting' as const, label: 'Starting Gear' },
+    { key: 'browse' as const, label: 'Browse Items' },
+    { key: 'custom' as const, label: 'Custom' },
+  ];
+
   return (
-    <div>
-      <div className="flex gap-2">
-        <input className="input flex-1" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder="Longsword, potion…" />
-        <input type="number" className="input w-16" value={qty} onChange={(e) => setQty(parseInt(e.target.value || '1', 10) || 1)} />
-        <button onClick={add} className="btn-primary">Add</button>
+    <div className="space-y-3">
+      {/* Tab bar */}
+      <div className="flex border-b border-ink/15">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => { setTab(t.key); setSelectedItems(new Set()); }}
+            className={`px-3 py-1.5 text-xs font-medium border-b-2 -mb-px transition-colors ${
+              tab === t.key
+                ? 'border-blood text-blood'
+                : 'border-transparent text-ink/50 hover:text-ink/80'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
+
+      {/* Starting Gear tab */}
+      {tab === 'starting' && (
+        <div>
+          {startingList.length === 0 ? (
+            <p className="text-sm text-ink/50">No starting equipment data for this class.</p>
+          ) : (
+            <>
+              <p className="text-xs text-ink/50 mb-2">Check items to add to your inventory.</p>
+              <ul className="space-y-1 max-h-52 overflow-y-auto pr-1">
+                {startingList.map((itemName, idx) => {
+                  const key = `${itemName}-${idx}`;
+                  return (
+                    <li key={key}>
+                      <label className="flex items-center gap-2 cursor-pointer text-sm rounded px-1 py-0.5 hover:bg-black/5">
+                        <input
+                          type="checkbox"
+                          checked={selectedItems.has(key)}
+                          onChange={() => toggleSelected(key)}
+                          className="accent-blood"
+                        />
+                        <span>{itemName}</span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+              <button
+                onClick={() => {
+                  if (selectedItems.size === 0) return;
+                  const toAdd = [...selectedItems].map((key) => {
+                    const idx = parseInt(key.split('-').pop() ?? '0', 10);
+                    return { name: startingList[idx] ?? key, qty: 1 };
+                  });
+                  update({ inventory: [...character.inventory, ...toAdd] });
+                  setSelectedItems(new Set());
+                }}
+                disabled={selectedItems.size === 0}
+                className="btn-primary mt-2 text-xs disabled:opacity-40"
+              >
+                Add {selectedItems.size > 0 ? `(${selectedItems.size})` : ''} to Inventory
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Browse Items tab */}
+      {tab === 'browse' && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-ink/50">Select items then click Add.</p>
+            <button
+              onClick={addSelected}
+              disabled={selectedItems.size === 0}
+              className="btn-primary text-xs disabled:opacity-40"
+            >
+              Add {selectedItems.size > 0 ? `(${selectedItems.size})` : 'selected'}
+            </button>
+          </div>
+          <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
+            {ITEM_CATEGORIES.map((cat) => (
+              <div key={cat.name} className="border border-ink/10 rounded">
+                <button
+                  onClick={() => setOpenCategory(openCategory === cat.name ? null : cat.name)}
+                  className="w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-black/5"
+                >
+                  <span>{cat.name}</span>
+                  <span>{openCategory === cat.name ? '▲' : '▼'}</span>
+                </button>
+                {openCategory === cat.name && (
+                  <ul className="border-t border-ink/10 divide-y divide-ink/5">
+                    {cat.items.map((item) => (
+                      <li key={item.name}>
+                        <label className="flex items-start gap-2 px-3 py-1.5 cursor-pointer hover:bg-black/5">
+                          <input
+                            type="checkbox"
+                            checked={selectedItems.has(item.name)}
+                            onChange={() => toggleSelected(item.name)}
+                            className="accent-blood mt-0.5 shrink-0"
+                          />
+                          <span className="flex-1 min-w-0">
+                            <span className="text-xs font-medium block">{item.name}</span>
+                            {(item.cost || item.weight) && (
+                              <span className="text-xs text-ink/40">
+                                {[item.cost, item.weight && `${item.weight}`].filter(Boolean).join(' · ')}
+                              </span>
+                            )}
+                            {item.notes && <span className="text-xs text-ink/40 block">{item.notes}</span>}
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Custom tab */}
+      {tab === 'custom' && (
+        <div className="flex gap-2">
+          <input
+            className="input flex-1"
+            value={customName}
+            onChange={(e) => setCustomName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addCustom()}
+            placeholder="Longsword, potion…"
+          />
+          <input
+            type="number"
+            className="input w-16"
+            value={customQty}
+            onChange={(e) => setCustomQty(parseInt(e.target.value || '1', 10) || 1)}
+          />
+          <button onClick={addCustom} className="btn-primary">Add</button>
+        </div>
+      )}
+
+      {/* Inventory list — always visible */}
       {character.inventory.length === 0 ? (
-        <p className="mt-3 text-sm text-ink/60">Nothing in your pack yet.</p>
+        <p className="text-sm text-ink/60">Nothing in your pack yet.</p>
       ) : (
-        <ul className="mt-3 space-y-1">
+        <ul className="space-y-1">
           {character.inventory.map((it, i) => (
             <li key={i} className="flex items-center justify-between rounded border border-ink/10 bg-white/60 px-2 py-1 text-sm">
               <span>{it.qty}× {it.name}</span>
-              <button onClick={() => remove(i)} className="text-xs text-blood">Remove</button>
+              <button onClick={() => removeItem(i)} className="text-xs text-blood">Remove</button>
             </li>
           ))}
         </ul>
